@@ -1,5 +1,5 @@
 use winit::{
-    event::{Event, WindowEvent},
+    event::{Event, WindowEvent, KeyboardInput, VirtualKeyCode},
     event_loop::{ControlFlow, EventLoop},
     window::WindowBuilder,
 };
@@ -23,7 +23,7 @@ pub async fn render() {
                 match event {
                     WindowEvent::CloseRequested | WindowEvent::KeyboardInput {
                         input:
-                        event::KeyboardInput {
+                        KeyboardInput {
                             state: ElementState::Pressed,
                             virtual_keycode: Some(VirtualKeyCode::Escape),
                             ..
