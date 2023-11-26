@@ -14,23 +14,21 @@ pub async fn render() {
 
     event_loop.run(move |event, _, control_flow| {
         // *control_flow = ControlFlow::Wait;
-
-        let _render = || {
+        let _render = |state: &mut State, control_flow: &mut ControlFlow| {
+            println!("try lambda");
             state.update();
             match state.render() {
                 Ok(_) => {}
                 Err(wgpu::SurfaceError::Lost) => state.resize(state.size),
                 Err(wgpu::SurfaceError::OutOfMemory) => *control_flow = ControlFlow::Exit,
                 Err(e) => eprintln!("{:?}", e)
-            };
+            }
         };
 
         match event {
             Event::MainEventsCleared => (),
             Event::RedrawEventsCleared => (),
-            Event::RedrawRequested(window_id) => if window_id == state.window().id() {
-                _render()
-            },
+            Event::RedrawRequested(window_id) => if window_id == state.window().id() { _render(&mut state, control_flow); },
             Event::NewEvents(StartCause::Poll) => (),
             Event::WindowEvent {
                 window_id,
@@ -39,7 +37,7 @@ pub async fn render() {
                 // println!("[{:?}] receive event WindowEvent {:?}, {:?}", chrono::Local::now(), window_id, event);
 
                 match event {
-                    WindowEvent::KeyboardInput {
+                    WindowEvent::CloseRequested | WindowEvent::KeyboardInput {
                         input: KeyboardInput {
                             state: ElementState::Pressed,
                             virtual_keycode: Some(VirtualKeyCode::Q) | Some(VirtualKeyCode::Escape),
@@ -60,7 +58,8 @@ pub async fn render() {
                     }
                     WindowEvent::CursorMoved { device_id, position, modifiers } => {
                         state.input(&event);
-                        _render()
+
+                        _render(&mut state, control_flow);
                     }
                     _ => {}
                 }
