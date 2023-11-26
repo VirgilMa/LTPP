@@ -15,17 +15,21 @@ pub async fn render() {
     event_loop.run(move |event, _, control_flow| {
         // *control_flow = ControlFlow::Wait;
 
+        let _render = || {
+            state.update();
+            match state.render() {
+                Ok(_) => {}
+                Err(wgpu::SurfaceError::Lost) => state.resize(state.size),
+                Err(wgpu::SurfaceError::OutOfMemory) => *control_flow = ControlFlow::Exit,
+                Err(e) => eprintln!("{:?}", e)
+            };
+        };
+
         match event {
             Event::MainEventsCleared => (),
             Event::RedrawEventsCleared => (),
             Event::RedrawRequested(window_id) => if window_id == state.window().id() {
-                state.update();
-                match state.render() {
-                    Ok(_) => {}
-                    Err(wgpu::SurfaceError::Lost) => state.resize(state.size),
-                    Err(wgpu::SurfaceError::OutOfMemory) => *control_flow = ControlFlow::Exit,
-                    Err(e) => eprintln!("{:?}", e)
-                }
+                _render()
             },
             Event::NewEvents(StartCause::Poll) => (),
             Event::WindowEvent {
@@ -56,15 +60,7 @@ pub async fn render() {
                     }
                     WindowEvent::CursorMoved { device_id, position, modifiers } => {
                         state.input(&event);
-
-                        state.update();
-
-                        match state.render() {
-                            Ok(_) => {}
-                            Err(wgpu::SurfaceError::Lost) => state.resize(state.size),
-                            Err(wgpu::SurfaceError::OutOfMemory) => *control_flow = ControlFlow::Exit,
-                            Err(e) => eprintln!("{:?}", e)
-                        }
+                        _render()
                     }
                     _ => {}
                 }
