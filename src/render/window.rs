@@ -1,5 +1,5 @@
 use winit::{
-    event::{Event, WindowEvent, KeyboardInput, VirtualKeyCode},
+    event::{Event, WindowEvent, KeyboardInput, VirtualKeyCode, StartCause},
     event_loop::{ControlFlow, EventLoop},
     window::WindowBuilder,
 };
@@ -16,30 +16,62 @@ pub async fn render() {
         // *control_flow = ControlFlow::Wait;
 
         match event {
+            Event::MainEventsCleared => (),
+            Event::RedrawEventsCleared => (),
+            Event::RedrawRequested(window_id) => if window_id == state.window().id() {
+                state.update();
+                match state.render() {
+                    Ok(_) => {}
+                    Err(wgpu::SurfaceError::Lost) => state.resize(state.size),
+                    Err(wgpu::SurfaceError::OutOfMemory) => *control_flow = ControlFlow::Exit,
+                    Err(e) => eprintln!("{:?}", e)
+                }
+            },
+            Event::NewEvents(StartCause::Poll) => (),
             Event::WindowEvent {
-                ref event,
                 window_id,
-            } if window_id == window.id() => if !state.input(event) {
+                event
+            } => if window_id == state.window().id() {
+                // println!("[{:?}] receive event WindowEvent {:?}, {:?}", chrono::Local::now(), window_id, event);
+
                 match event {
-                    WindowEvent::CloseRequested | WindowEvent::KeyboardInput {
-                        input:
-                        KeyboardInput {
+                    WindowEvent::KeyboardInput {
+                        input: KeyboardInput {
                             state: ElementState::Pressed,
-                            virtual_keycode: Some(VirtualKeyCode::Escape),
+                            virtual_keycode: Some(VirtualKeyCode::Q) | Some(VirtualKeyCode::Escape),
                             ..
                         },
                         ..
-                    } => { *control_flow = ControlFlow::Exit }
+                    } => {
+                        println!("received {:?}. EXIT", event);
+                        *control_flow = ControlFlow::Exit
+                    }
                     WindowEvent::Resized(physical_size) => {
-                        state.resize(*physical_size);
+                        state.resize(physical_size);
+                        // println!("WindowEvent::Resized {:?}", physical_size);
                     }
                     WindowEvent::ScaleFactorChanged { new_inner_size, .. } => {
-                        state.resize(**new_inner_size);
+                        state.resize(*new_inner_size);
+                        // println!("WindowEvent::ScaleFactorChanged {:?}", new_inner_size);
                     }
-                    _ => ()
+                    WindowEvent::CursorMoved { device_id, position, modifiers } => {
+                        state.input(&event);
+
+                        state.update();
+
+                        match state.render() {
+                            Ok(_) => {}
+                            Err(wgpu::SurfaceError::Lost) => state.resize(state.size),
+                            Err(wgpu::SurfaceError::OutOfMemory) => *control_flow = ControlFlow::Exit,
+                            Err(e) => eprintln!("{:?}", e)
+                        }
+                    }
+                    _ => {}
                 }
             }
-            _ => (),
-        }
+            _ => {
+                // println!("[{:?}] receive event {:?}", chrono::Local::now(), event);
+            }
+        };
     });
 }
