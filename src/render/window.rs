@@ -1,10 +1,10 @@
+use super::state::State;
+use winit::event::ElementState;
 use winit::{
-    event::{Event, WindowEvent, KeyboardInput, VirtualKeyCode, StartCause},
+    event::{Event, KeyboardInput, StartCause, VirtualKeyCode, WindowEvent},
     event_loop::{ControlFlow, EventLoop},
     window::WindowBuilder,
 };
-use winit::event::ElementState;
-use super::state::State;
 
 pub async fn render() {
     let event_loop = EventLoop::new();
@@ -21,47 +21,57 @@ pub async fn render() {
                 Ok(_) => {}
                 Err(wgpu::SurfaceError::Lost) => state.resize(state.size),
                 Err(wgpu::SurfaceError::OutOfMemory) => *control_flow = ControlFlow::Exit,
-                Err(e) => eprintln!("{:?}", e)
+                Err(e) => eprintln!("{:?}", e),
             }
         };
 
         match event {
             Event::MainEventsCleared => (),
             Event::RedrawEventsCleared => (),
-            Event::RedrawRequested(window_id) => if window_id == state.window().id() { _render(&mut state, control_flow); },
+            Event::RedrawRequested(window_id) => {
+                if window_id == state.window().id() {
+                    _render(&mut state, control_flow);
+                }
+            }
             Event::NewEvents(StartCause::Poll) => (),
-            Event::WindowEvent {
-                window_id,
-                event
-            } => if window_id == state.window().id() {
-                // println!("[{:?}] receive event WindowEvent {:?}, {:?}", chrono::Local::now(), window_id, event);
+            Event::WindowEvent { window_id, event } => {
+                if window_id == state.window().id() {
+                    // println!("[{:?}] receive event WindowEvent {:?}, {:?}", chrono::Local::now(), window_id, event);
 
-                match event {
-                    WindowEvent::CloseRequested | WindowEvent::KeyboardInput {
-                        input: KeyboardInput {
-                            state: ElementState::Pressed,
-                            virtual_keycode: Some(VirtualKeyCode::Q) | Some(VirtualKeyCode::Escape),
+                    match event {
+                        WindowEvent::CloseRequested
+                        | WindowEvent::KeyboardInput {
+                            input:
+                                KeyboardInput {
+                                    state: ElementState::Pressed,
+                                    virtual_keycode:
+                                        Some(VirtualKeyCode::Q) | Some(VirtualKeyCode::Escape),
+                                    ..
+                                },
                             ..
-                        },
-                        ..
-                    } => {
-                        println!("received {:?}. EXIT", event);
-                        *control_flow = ControlFlow::Exit
-                    }
-                    WindowEvent::Resized(physical_size) => {
-                        state.resize(physical_size);
-                        // println!("WindowEvent::Resized {:?}", physical_size);
-                    }
-                    WindowEvent::ScaleFactorChanged { new_inner_size, .. } => {
-                        state.resize(*new_inner_size);
-                        // println!("WindowEvent::ScaleFactorChanged {:?}", new_inner_size);
-                    }
-                    WindowEvent::CursorMoved { device_id, position, modifiers } => {
-                        state.input(&event);
+                        } => {
+                            println!("received {:?}. EXIT", event);
+                            *control_flow = ControlFlow::Exit
+                        }
+                        WindowEvent::Resized(physical_size) => {
+                            state.resize(physical_size);
+                            // println!("WindowEvent::Resized {:?}", physical_size);
+                        }
+                        WindowEvent::ScaleFactorChanged { new_inner_size, .. } => {
+                            state.resize(*new_inner_size);
+                            // println!("WindowEvent::ScaleFactorChanged {:?}", new_inner_size);
+                        }
+                        WindowEvent::CursorMoved {
+                            device_id,
+                            position,
+                            modifiers,
+                        } => {
+                            state.input(&event);
 
-                        _render(&mut state, control_flow);
+                            _render(&mut state, control_flow);
+                        }
+                        _ => {}
                     }
-                    _ => {}
                 }
             }
             _ => {
