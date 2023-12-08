@@ -15,7 +15,6 @@ pub async fn render() {
     event_loop.run(move |event, _, control_flow| {
         // *control_flow = ControlFlow::Wait;
         let _render = |state: &mut State, control_flow: &mut ControlFlow| {
-            println!("try lambda");
             state.update();
             match state.render() {
                 Ok(_) => {}
