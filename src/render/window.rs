@@ -37,6 +37,8 @@ pub async fn render() {
                 if window_id == state.window().id() {
                     // println!("[{:?}] receive event WindowEvent {:?}, {:?}", chrono::Local::now(), window_id, event);
 
+                    state.input(&event);
+
                     match event {
                         WindowEvent::CloseRequested
                         | WindowEvent::KeyboardInput {
@@ -60,15 +62,15 @@ pub async fn render() {
                             state.resize(*new_inner_size);
                             // println!("WindowEvent::ScaleFactorChanged {:?}", new_inner_size);
                         }
-                        WindowEvent::CursorMoved {
-                            device_id,
-                            position,
-                            modifiers,
-                        } => {
-                            state.input(&event);
+                        // WindowEvent::CursorMoved {
+                        //     device_id,
+                        //     position,
+                        //     modifiers,
+                        // } => {
+                        //     state.input(&event);
 
-                            _render(&mut state, control_flow);
-                        }
+                        //     _render(&mut state, control_flow);
+                        // }
                         _ => {}
                     }
                 }
