@@ -87,7 +87,9 @@ impl State {
         };
         surface.configure(&device, &config);
 
-        let diffuse_bytes = include_bytes!("happy-tree.png");
+        let diffuse_bytes = include_bytes!("resources/happy-tree.png");
+        let diffuse_bytes2 = include_bytes!("resources/sad-tree.png");
+
         let diffuse_texture =
             texture::Texture::from_bytes(&device, &queue, diffuse_bytes, "happy-tree.png").unwrap();
 
