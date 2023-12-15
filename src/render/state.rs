@@ -1,7 +1,7 @@
 use crate::render::lib::VERTICES;
 use image::GenericImageView;
 use wgpu::util::DeviceExt;
-use winit::event::WindowEvent;
+use winit::event::{ElementState, KeyboardInput, VirtualKeyCode, WindowEvent};
 use winit::window::Window;
 
 use super::{
@@ -27,6 +27,9 @@ pub struct State {
 
     diffuse_bind_group: wgpu::BindGroup,
     diffuse_texture: texture::Texture,
+    diffuse_bind_group2: wgpu::BindGroup,
+    diffuse_texture2: texture::Texture,
+    diffuse_texture_switch: bool,
 }
 
 impl State {
@@ -133,6 +136,49 @@ impl State {
             label: Some("diffuse_bind_group"),
         });
 
+        let diffuse_texture2 =
+            texture::Texture::from_bytes(&device, &queue, diffuse_bytes2, "sad-tree.png").unwrap();
+
+        let texture_bind_group_layout2 =
+            device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+                entries: &[
+                    wgpu::BindGroupLayoutEntry {
+                        binding: 0,
+                        visibility: wgpu::ShaderStages::FRAGMENT,
+                        ty: wgpu::BindingType::Texture {
+                            multisampled: false,
+                            view_dimension: wgpu::TextureViewDimension::D2,
+                            sample_type: wgpu::TextureSampleType::Float { filterable: true },
+                        },
+                        count: None,
+                    },
+                    wgpu::BindGroupLayoutEntry {
+                        binding: 1,
+                        visibility: wgpu::ShaderStages::FRAGMENT,
+                        // This should match the filterable field of the
+                        // corresponding Texture entry above.
+                        ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Filtering),
+                        count: None,
+                    },
+                ],
+                label: Some("texture_bind_group_layout2"),
+            });
+
+        let diffuse_bind_group2 = device.create_bind_group(&wgpu::BindGroupDescriptor {
+            layout: &texture_bind_group_layout2,
+            entries: &[
+                wgpu::BindGroupEntry {
+                    binding: 0,
+                    resource: wgpu::BindingResource::TextureView(&diffuse_texture2.view),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 1,
+                    resource: wgpu::BindingResource::Sampler(&diffuse_texture2.sampler),
+                },
+            ],
+            label: Some("diffuse_bind_group2"),
+        });
+
         let clear_color = wgpu::Color {
             r: 0.1,
             g: 0.2,
@@ -206,6 +252,7 @@ impl State {
 
         let num_vertices = VERTICES.len() as u32;
         let num_indices = INDICES.len() as u32;
+        let diffuse_texture_switch = true;
 
         Self {
             window,
@@ -222,6 +269,9 @@ impl State {
             num_indices,
             diffuse_bind_group,
             diffuse_texture,
+            diffuse_bind_group2,
+            diffuse_texture2,
+            diffuse_texture_switch,
         }
     }
 
@@ -253,6 +303,18 @@ impl State {
                 // );
             }
             WindowEvent::CursorEntered { device_id } => {}
+            WindowEvent::KeyboardInput {
+                input:
+                    KeyboardInput {
+                        state: ElementState::Pressed,
+                        virtual_keycode: Some(VirtualKeyCode::Space),
+                        ..
+                    },
+                ..
+            } => {
+                self.diffuse_texture_switch = !self.diffuse_texture_switch;
+                self.render();
+            }
             _ => {}
         }
         true
@@ -290,7 +352,12 @@ impl State {
             });
 
             render_pass.set_pipeline(&self.render_pipeline);
-            render_pass.set_bind_group(0, &self.diffuse_bind_group, &[]);
+            let bind_group = if self.diffuse_texture_switch {
+                &self.diffuse_bind_group
+            } else {
+                &self.diffuse_bind_group2
+            };
+            render_pass.set_bind_group(0, bind_group, &[]);
             render_pass.set_vertex_buffer(0, self.vertex_buffer.slice(..));
             render_pass.set_index_buffer(self.index_buffer.slice(..), wgpu::IndexFormat::Uint16);
 
