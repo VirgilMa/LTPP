@@ -1,9 +1,9 @@
 use crate::render::lib::VERTICES;
-use image::GenericImageView;
 use wgpu::util::DeviceExt;
 use winit::event::{ElementState, KeyboardInput, VirtualKeyCode, WindowEvent};
 use winit::window::Window;
 
+use super::camera::Camera;
 use super::{
     lib::{Vertex, INDICES},
     texture,
@@ -20,16 +20,15 @@ pub struct State {
 
     render_pipeline: wgpu::RenderPipeline,
     vertex_buffer: wgpu::Buffer,
-    num_vertices: u32,
 
     index_buffer: wgpu::Buffer,
     num_indices: u32,
 
     diffuse_bind_group: wgpu::BindGroup,
-    diffuse_texture: texture::Texture,
     diffuse_bind_group2: wgpu::BindGroup,
-    diffuse_texture2: texture::Texture,
     diffuse_texture_switch: bool,
+
+    camera: Camera,
 }
 
 impl State {
@@ -250,9 +249,18 @@ impl State {
             usage: wgpu::BufferUsages::INDEX,
         });
 
-        let num_vertices = VERTICES.len() as u32;
         let num_indices = INDICES.len() as u32;
         let diffuse_texture_switch = true;
+
+        let camera = Camera {
+            eye: (0.0, 1.0, 2.0).into(),
+            target: (0.0, 0.0, 0.0).into(),
+            up: cgmath::Vector3::unit_y(),
+            aspect: config.width as f32 / config.height as f32,
+            fovy: 45.0,
+            znear: 0.1,
+            zfar: 100.0,
+        };
 
         Self {
             window,
@@ -264,14 +272,12 @@ impl State {
             clear_color,
             render_pipeline,
             vertex_buffer,
-            num_vertices,
             index_buffer,
             num_indices,
             diffuse_bind_group,
-            diffuse_texture,
             diffuse_bind_group2,
-            diffuse_texture2,
             diffuse_texture_switch,
+            camera,
         }
     }
 
@@ -313,7 +319,7 @@ impl State {
                 ..
             } => {
                 self.diffuse_texture_switch = !self.diffuse_texture_switch;
-                self.render();
+                self.render().unwrap();
             }
             _ => {}
         }
