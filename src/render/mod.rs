@@ -1,3 +1,4 @@
-pub mod state;
-pub mod window;
 mod lib;
+mod state;
+mod texture;
+pub mod window;
