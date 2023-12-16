@@ -1,6 +1,10 @@
 Long-Term Physics Project
 
-# todo list
+# Quick Start
+
+Install Rust and run `Cargo run` in the repository.
+
+## TODO
 
 [ ] a simple render engine (with GUI)
 
