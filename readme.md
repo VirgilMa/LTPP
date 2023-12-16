@@ -1,6 +1,6 @@
-Long-Term Physics Project
+# Long-Term Physics Project
 
-# Quick Start
+## Quick Start
 
 Install Rust and run `Cargo run` in the repository.
 
