@@ -6,4 +6,6 @@ Long-Term Physics Project
 
     - wgpu
 
+[ ] camera simple movement
+
 [ ] a simple physics engine
