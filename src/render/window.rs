@@ -62,15 +62,6 @@ pub async fn render() {
                             state.resize(*new_inner_size);
                             // println!("WindowEvent::ScaleFactorChanged {:?}", new_inner_size);
                         }
-                        // WindowEvent::CursorMoved {
-                        //     device_id,
-                        //     position,
-                        //     modifiers,
-                        // } => {
-                        //     state.input(&event);
-
-                        //     _render(&mut state, control_flow);
-                        // }
                         _ => {}
                     }
                 }
