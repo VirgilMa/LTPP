@@ -45,8 +45,7 @@ pub async fn render() {
                             input:
                                 KeyboardInput {
                                     state: ElementState::Pressed,
-                                    virtual_keycode:
-                                        Some(VirtualKeyCode::Q) | Some(VirtualKeyCode::Escape),
+                                    virtual_keycode: Some(VirtualKeyCode::Escape),
                                     ..
                                 },
                             ..

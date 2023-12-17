@@ -60,6 +60,8 @@ pub struct CameraController {
     is_backward_pressed: bool,
     is_left_pressed: bool,
     is_right_pressed: bool,
+    is_up_pressed: bool,
+    is_down_pressed: bool,
 }
 
 impl CameraController {
@@ -70,6 +72,8 @@ impl CameraController {
             is_backward_pressed: false,
             is_left_pressed: false,
             is_right_pressed: false,
+            is_up_pressed: false,
+            is_down_pressed: false,
         }
     }
 
@@ -102,6 +106,14 @@ impl CameraController {
                         self.is_right_pressed = is_pressed;
                         true
                     }
+                    VirtualKeyCode::Q => {
+                        self.is_up_pressed = is_pressed;
+                        true
+                    }
+                    VirtualKeyCode::E => {
+                        self.is_down_pressed = is_pressed;
+                        true
+                    }
                     _ => false,
                 }
             }
@@ -116,6 +128,7 @@ impl CameraController {
         let forward = camera.target - camera.eye;
         let forward_norm = forward.normalize();
         let forward_mag = forward.magnitude();
+        let up_norm = camera.up.normalize();
 
         // Prevents glitching when the camera gets too close to the
         // center of the scene.
@@ -136,10 +149,27 @@ impl CameraController {
             // Rescale the distance between the target and the eye so
             // that it doesn't change. The eye, therefore, still
             // lies on the circle made by the target and eye.
-            camera.eye = camera.target - (forward + right * self.speed).normalize() * forward_mag;
+            let right_move = right * self.speed;
+            camera.eye = camera.eye + right_move;
+            camera.target = camera.target + right_move;
+            // camera.eye = camera.target - (forward + right * self.speed).normalize() * forward_mag;
         }
         if self.is_left_pressed {
-            camera.eye = camera.target - (forward - right * self.speed).normalize() * forward_mag;
+            // camera.eye = camera.target - (forward - right * self.speed).normalize() * forward_mag;
+            let right_move = -right * self.speed;
+            camera.eye = camera.eye + right_move;
+            camera.target = camera.target + right_move;
+        }
+
+        if self.is_up_pressed {
+            let up_move = up_norm * self.speed;
+            camera.eye = camera.eye + up_move;
+            camera.target = camera.target + up_move;
+        }
+        if self.is_down_pressed {
+            let up_move = -up_norm * self.speed;
+            camera.eye = camera.eye + up_move;
+            camera.target = camera.target + up_move;
         }
     }
 }

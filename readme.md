@@ -13,3 +13,5 @@ Install Rust and run `Cargo run` in the repository.
 [ ] camera simple movement
 
 [ ] a simple physics engine
+
+[ ] make window event another thread, and render procedure in main thread.
