@@ -1,4 +1,10 @@
-use winit::event::{ElementState, KeyboardInput, VirtualKeyCode, WindowEvent};
+use std::f32::consts::PI;
+
+use cgmath::{Quaternion, Rad, Rotation, Rotation3};
+use winit::{
+    dpi::{PhysicalPosition, PhysicalSize},
+    event::{ElementState, KeyboardInput, MouseButton, VirtualKeyCode, WindowEvent},
+};
 
 #[rustfmt::skip]
 const OPENGL_TO_WGPU_MATRIX: cgmath::Matrix4<f32> = cgmath::Matrix4::new(
@@ -62,10 +68,16 @@ pub struct CameraController {
     is_right_pressed: bool,
     is_up_pressed: bool,
     is_down_pressed: bool,
+
+    is_mouse_right_pressed: bool,
+    mouse_speed: f32,
+    old_position: Option<PhysicalPosition<f64>>,
+    new_position: Option<PhysicalPosition<f64>>,
+    window_size: PhysicalSize<u32>,
 }
 
 impl CameraController {
-    pub fn new(speed: f32) -> Self {
+    pub fn new(speed: f32, mouse_speed: f32, window_size: &PhysicalSize<u32>) -> Self {
         Self {
             speed,
             is_forward_pressed: false,
@@ -74,11 +86,31 @@ impl CameraController {
             is_right_pressed: false,
             is_up_pressed: false,
             is_down_pressed: false,
+            is_mouse_right_pressed: false,
+            old_position: None,
+            new_position: None,
+            mouse_speed,
+            window_size: *window_size,
         }
     }
 
     pub fn process_events(&mut self, event: &WindowEvent) -> bool {
         let ret = match event {
+            WindowEvent::MouseInput {
+                state,
+                button: MouseButton::Right,
+                ..
+            } => {
+                self.is_mouse_right_pressed = *state == ElementState::Pressed;
+                false
+            }
+            WindowEvent::CursorMoved { position, .. } => {
+                if self.is_mouse_right_pressed {
+                    self.new_position = Some(*position);
+                    // println!("mouse position {:?}", position)
+                }
+                true
+            }
             WindowEvent::KeyboardInput {
                 input:
                     KeyboardInput {
@@ -119,11 +151,11 @@ impl CameraController {
             }
             _ => false,
         };
-        println!("{:?}", self);
+        // println!("{:?}", self);
         ret
     }
 
-    pub fn update_camera(&self, camera: &mut Camera) {
+    pub fn update_camera(&mut self, camera: &mut Camera) {
         use cgmath::InnerSpace;
         let forward = camera.target - camera.eye;
         let forward_norm = forward.normalize();
@@ -171,5 +203,43 @@ impl CameraController {
             camera.eye = camera.eye + up_move;
             camera.target = camera.target + up_move;
         }
+
+        // width height stands for 360 degrees
+        if let Some(new_position_in) = self.new_position {
+            if let Some(old_position_in) = self.old_position {
+                let move_x = (new_position_in.x - old_position_in.x) as f32
+                    / self.window_size.width as f32
+                    * PI
+                    * 2.0
+                    * self.mouse_speed;
+                let move_y = (new_position_in.y - old_position_in.y) as f32
+                    / self.window_size.height as f32
+                    * PI
+                    * 2.0
+                    * self.mouse_speed;
+
+                let move_x_rad = cgmath::Rad(move_x);
+                let move_y_rad = cgmath::Rad(move_y);
+                let dir_vec = camera.target - camera.eye;
+
+                let rot_quat =
+                    Quaternion::from_angle_y(-move_x_rad) * Quaternion::from_angle_x(-move_y_rad);
+                let new_dir_vec = rot_quat.rotate_vector(dir_vec);
+
+                // println!(
+                //     "{:?} {:?} {:?} {:?} old_dir: {:?}, new_dir: {:?}",
+                //     self.old_position,
+                //     self.new_position,
+                //     move_x_rad,
+                //     move_y_rad,
+                //     dir_vec,
+                //     new_dir_vec
+                // );
+
+                camera.target = camera.eye + new_dir_vec;
+            }
+        }
+        self.old_position = self.new_position;
+        self.new_position = None
     }
 }

@@ -300,7 +300,7 @@ impl State {
         let num_indices = INDICES.len() as u32;
         let diffuse_texture_switch = true;
 
-        let camera_controller = CameraController::new(0.2);
+        let camera_controller = CameraController::new(0.2, 1.0, &size);
 
         // instances
         let instances = (0..NUM_INSTANCE_PER_ROW)
