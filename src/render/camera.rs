@@ -207,13 +207,16 @@ impl CameraController {
         // width height stands for 360 degrees
         if let Some(new_position_in) = self.new_position {
             if let Some(old_position_in) = self.old_position {
-                const RAD_STEP_PER_PIXEL: f32 = PI * 2.0 * self.mouse_speed;
                 let move_x = (new_position_in.x - old_position_in.x) as f32
                     / self.window_size.width as f32
-                    * RAD_STEP_PER_PIXEL;
+                    * PI
+                    * 2.0
+                    * self.mouse_speed;
                 let move_y = (new_position_in.y - old_position_in.y) as f32
                     / self.window_size.height as f32
-                    * RAD_STEP_PER_PIXEL;
+                    * PI
+                    * 2.0
+                    * self.mouse_speed;
 
                 let move_x_rad = cgmath::Rad(move_x);
                 let move_y_rad = cgmath::Rad(move_y);
