@@ -227,6 +227,6 @@ impl CameraController {
             }
         }
         self.old_position = self.new_position;
-        self.new_position = None
+        self.new_position = None;
     }
 }
