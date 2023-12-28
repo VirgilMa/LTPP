@@ -1,3 +1,8 @@
+use std::thread::sleep;
+use std::time::{Duration, Instant};
+
+use crate::render::state;
+
 use super::state::State;
 use winit::event::ElementState;
 use winit::{
@@ -12,8 +17,24 @@ pub async fn render() {
 
     let mut state = State::new(window).await;
 
+    let mut count = 0;
+    let mut last_time = chrono::Local::now();
+
     event_loop.run(move |event, _, control_flow| {
-        // *control_flow = ControlFlow::Wait;
+        // let now = Instant::now();
+        // let dur = Duration::from_millis(30);
+        *control_flow = ControlFlow::WaitUntil(Instant::now() + Duration::from_millis(30));
+
+        // simple counter. not right
+        count += 1;
+        let now = chrono::Local::now();
+        println!("tick {:?} {:?}", now, event);
+        if now - last_time > chrono::Duration::seconds(1) {
+            println!("fps: {}, now {}", count, now);
+            last_time = now;
+            count = 0;
+        }
+
         let _render = |state: &mut State, control_flow: &mut ControlFlow| {
             state.update();
             match state.render() {
