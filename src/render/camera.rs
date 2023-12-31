@@ -151,6 +151,7 @@ impl CameraController {
             }
             _ => false,
         };
+        println!("set camera");
         // println!("{:?}", self);
         ret
     }
@@ -231,5 +232,7 @@ impl CameraController {
         }
         self.old_position = self.new_position;
         self.new_position = None;
+
+        println!("update camera");
     }
 }

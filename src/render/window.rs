@@ -28,7 +28,7 @@ pub async fn render() {
         // simple counter. not right
         count += 1;
         let now = chrono::Local::now();
-        println!("tick {:?} {:?}", now, event);
+        // println!("tick {:?} {:?}", now, event);
         if now - last_time > chrono::Duration::seconds(1) {
             println!("fps: {}, now {}", count, now);
             last_time = now;
