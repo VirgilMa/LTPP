@@ -1,6 +1,6 @@
 use std::f32::consts::PI;
 
-use cgmath::{Quaternion, Rad, Rotation, Rotation3};
+use cgmath::{Quaternion, Rotation, Rotation3};
 use winit::{
     dpi::{PhysicalPosition, PhysicalSize},
     event::{ElementState, KeyboardInput, MouseButton, VirtualKeyCode, WindowEvent},
