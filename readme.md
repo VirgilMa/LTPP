@@ -7,6 +7,7 @@ Install Rust and run `Cargo run` in the repository.
 ## TODO
 
 - [X] camera simple movement
+- [ ] fixed 60 frames per second
 - [ ] a simple render engine
 - [ ] simple GUI
 - [ ] a simple physics engine

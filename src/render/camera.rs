@@ -163,7 +163,7 @@ impl CameraController {
         ret
     }
 
-    pub fn camera_wheel_move(camera: &mut Camera, forward: f32, left: f32) {
+    pub fn camera_wheel_move(&self, camera: &mut Camera, forward: f32, left: f32) {
         use cgmath::InnerSpace;
         let forward = camera.target - camera.eye;
         let forward_norm = forward.normalize();
