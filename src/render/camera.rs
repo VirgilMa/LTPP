@@ -111,6 +111,13 @@ impl CameraController {
                 }
                 true
             }
+            WindowEvent::MouseWheel { delta, .. } => match delta {
+                winit::event::MouseScrollDelta::LineDelta(lines, rows) => {
+                    println!("lines<{:?}>, rows<{:?}>", lines, rows);
+                    true
+                }
+                _ => false,
+            },
             WindowEvent::KeyboardInput {
                 input:
                     KeyboardInput {
@@ -156,6 +163,54 @@ impl CameraController {
         ret
     }
 
+    pub fn camera_wheel_move(camera: &mut Camera, forward: f32, left: f32) {
+        use cgmath::InnerSpace;
+        let forward = camera.target - camera.eye;
+        let forward_norm = forward.normalize();
+        let forward_mag = forward.magnitude();
+        let up_norm = camera.up.normalize();
+
+        // Prevents glitching when the camera gets too close to the
+        // center of the scene.
+        if self.is_forward_pressed {
+            camera.eye += forward_norm * self.speed;
+        }
+        if self.is_backward_pressed {
+            camera.eye -= forward_norm * self.speed;
+        }
+
+        let right = forward_norm.cross(camera.up);
+
+        // Redo radius calc in case the forward/backward is pressed.
+        let forward = camera.target - camera.eye;
+        let forward_mag = forward.magnitude();
+
+        if self.is_right_pressed {
+            // Rescale the distance between the target and the eye so
+            // that it doesn't change. The eye, therefore, still
+            // lies on the circle made by the target and eye.
+            let right_move = right * self.speed;
+            camera.eye = camera.eye + right_move;
+            camera.target = camera.target + right_move;
+        }
+        if self.is_left_pressed {
+            let right_move = -right * self.speed;
+            camera.eye = camera.eye + right_move;
+            camera.target = camera.target + right_move;
+        }
+
+        if self.is_up_pressed {
+            let up_move = up_norm * self.speed;
+            camera.eye = camera.eye + up_move;
+            camera.target = camera.target + up_move;
+        }
+        if self.is_down_pressed {
+            let up_move = -up_norm * self.speed;
+            camera.eye = camera.eye + up_move;
+            camera.target = camera.target + up_move;
+        }
+    }
+
     pub fn update_camera(&mut self, camera: &mut Camera) {
         use cgmath::InnerSpace;
         let forward = camera.target - camera.eye;
@@ -165,11 +220,13 @@ impl CameraController {
 
         // Prevents glitching when the camera gets too close to the
         // center of the scene.
-        if self.is_forward_pressed && forward_mag > self.speed {
+        if self.is_forward_pressed {
             camera.eye += forward_norm * self.speed;
+            camera.target += forward_norm * self.speed;
         }
         if self.is_backward_pressed {
             camera.eye -= forward_norm * self.speed;
+            camera.target -= forward_norm * self.speed;
         }
 
         let right = forward_norm.cross(camera.up);
