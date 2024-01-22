@@ -1,7 +1,4 @@
-use std::thread::sleep;
 use std::time::{Duration, Instant};
-
-use crate::render::state;
 
 use super::state::State;
 use winit::event::ElementState;
