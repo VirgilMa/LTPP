@@ -1,4 +1,4 @@
-// use std::time::{Duration, Instant};
+use std::time::{Duration, Instant};
 
 use super::state::State;
 use winit::event::ElementState;
@@ -8,11 +8,35 @@ use winit::{
     window::WindowBuilder,
 };
 
+struct FpsCounter {
+    timestamp: Instant,
+    count: u64,
+}
+
+impl FpsCounter {
+    fn new() -> Self {
+        Self {
+            timestamp: Instant::now(),
+            count: 0,
+        }
+    }
+    fn count(&mut self) {
+        self.count += 1;
+        let du = Instant::now() - self.timestamp;
+        if du >= Duration::from_secs(1) {
+            println!("fps: {}", self.count);
+            self.count = 0;
+            self.timestamp = Instant::now();
+        }
+    }
+}
+
 pub async fn render() {
     let event_loop = EventLoop::new();
     let window = WindowBuilder::new().build(&event_loop).unwrap();
 
     let mut state = State::new(window).await;
+    let mut fps_counter = FpsCounter::new();
 
     event_loop.run(move |event, _, control_flow| {
         match event {
@@ -28,7 +52,8 @@ pub async fn render() {
                         Err(wgpu::SurfaceError::Lost) => state.resize(state.size),
                         Err(wgpu::SurfaceError::OutOfMemory) => *control_flow = ControlFlow::Exit,
                         Err(e) => eprintln!("{:?}", e),
-                    }
+                    };
+                    fps_counter.count();
                 }
             }
             Event::NewEvents(StartCause::Poll) => (),

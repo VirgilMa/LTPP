@@ -332,7 +332,7 @@ impl State {
             .collect::<Vec<_>>();
 
         // rotate vector to show the value of depth buffer
-        println!("instance vec orig: {:?}", instances);
+        // println!("instance vec orig: {:?}", instances);
         let instances_len = instances.len();
         for i in 0..(instances_len / 2) {
             instances.swap(i, instances_len - 1 - i);
