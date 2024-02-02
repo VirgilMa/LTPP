@@ -1,4 +1,4 @@
-use std::time::{Duration, Instant};
+// use std::time::{Duration, Instant};
 
 use super::state::State;
 use winit::event::ElementState;
@@ -14,40 +14,21 @@ pub async fn render() {
 
     let mut state = State::new(window).await;
 
-    let mut count = 0;
-    let mut last_time = chrono::Local::now();
-
     event_loop.run(move |event, _, control_flow| {
-        // let now = Instant::now();
-        // let dur = Duration::from_millis(30);
-        *control_flow = ControlFlow::WaitUntil(Instant::now() + Duration::from_millis(30));
-
-        // simple counter. not right
-        count += 1;
-        let now = chrono::Local::now();
-        // println!("tick {:?} {:?}", now, event);
-        if now - last_time > chrono::Duration::seconds(1) {
-            println!("fps: {}, now {}", count, now);
-            last_time = now;
-            count = 0;
-        }
-
-        let _render = |state: &mut State, control_flow: &mut ControlFlow| {
-            state.update();
-            match state.render() {
-                Ok(_) => {}
-                Err(wgpu::SurfaceError::Lost) => state.resize(state.size),
-                Err(wgpu::SurfaceError::OutOfMemory) => *control_flow = ControlFlow::Exit,
-                Err(e) => eprintln!("{:?}", e),
-            }
-        };
-
         match event {
-            Event::MainEventsCleared => (),
+            Event::MainEventsCleared => {
+                state.window().request_redraw();
+            }
             Event::RedrawEventsCleared => (),
             Event::RedrawRequested(window_id) => {
                 if window_id == state.window().id() {
-                    _render(&mut state, control_flow);
+                    state.update();
+                    match state.render() {
+                        Ok(_) => {}
+                        Err(wgpu::SurfaceError::Lost) => state.resize(state.size),
+                        Err(wgpu::SurfaceError::OutOfMemory) => *control_flow = ControlFlow::Exit,
+                        Err(e) => eprintln!("{:?}", e),
+                    }
                 }
             }
             Event::NewEvents(StartCause::Poll) => (),
@@ -83,9 +64,7 @@ pub async fn render() {
                     }
                 }
             }
-            _ => {
-                // println!("[{:?}] receive event {:?}", chrono::Local::now(), event);
-            }
+            _ => {}
         };
     });
 }

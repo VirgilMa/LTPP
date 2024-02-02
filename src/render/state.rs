@@ -1,4 +1,3 @@
-use crate::render::lib::VERTICES;
 use crate::render::model::ModelVertex;
 use cgmath::{InnerSpace, Rotation3, Zero};
 use wgpu::util::DeviceExt;
@@ -20,10 +19,6 @@ pub struct State {
     clear_color: wgpu::Color,
 
     render_pipeline: wgpu::RenderPipeline,
-    vertex_buffer: wgpu::Buffer,
-
-    index_buffer: wgpu::Buffer,
-    num_indices: u32,
 
     diffuse_bind_group: wgpu::BindGroup,
     diffuse_bind_group2: wgpu::BindGroup,
@@ -297,19 +292,19 @@ impl State {
             multiview: None, // 5.
         });
 
-        let vertex_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-            label: Some("Vertex Buffer"),
-            contents: bytemuck::cast_slice(VERTICES),
-            usage: wgpu::BufferUsages::VERTEX,
-        });
+        // let vertex_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+        //     label: Some("Vertex Buffer"),
+        //     contents: bytemuck::cast_slice(VERTICES),
+        //     usage: wgpu::BufferUsages::VERTEX,
+        // });
 
-        let index_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-            label: Some("Index Buffer"),
-            contents: bytemuck::cast_slice(INDICES),
-            usage: wgpu::BufferUsages::INDEX,
-        });
+        // let index_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+        //     label: Some("Index Buffer"),
+        //     contents: bytemuck::cast_slice(INDICES),
+        //     usage: wgpu::BufferUsages::INDEX,
+        // });
 
-        let num_indices = INDICES.len() as u32;
+        // let num_indices = INDICES.len() as u32;
         let diffuse_texture_switch = true;
 
         let camera_controller = CameraController::new(0.2, 1.0, &size);
@@ -368,9 +363,6 @@ impl State {
             size,
             clear_color,
             render_pipeline,
-            vertex_buffer,
-            index_buffer,
-            num_indices,
             diffuse_bind_group,
             diffuse_bind_group2,
             diffuse_texture_switch,
@@ -403,7 +395,9 @@ impl State {
     }
 
     pub fn input(&mut self, event: &WindowEvent) -> bool {
-        let mut need_render = self.camera_controller.process_events(event);
+        if self.camera_controller.process_events(event) {
+            return true;
+        }
         match event {
             WindowEvent::KeyboardInput {
                 input:
@@ -415,15 +409,15 @@ impl State {
                 ..
             } => {
                 self.diffuse_texture_switch = !self.diffuse_texture_switch;
-                need_render = true;
+                true
             }
-            _ => {}
+            _ => false,
         }
-        if need_render {
-            self.update();
-            self.render().unwrap();
-        }
-        true
+        // if need_render {
+        //     self.update();
+        //     self.render().unwrap();
+        // }
+        // true
     }
 
     pub fn update(&mut self) {
@@ -477,11 +471,7 @@ impl State {
             render_pass.set_bind_group(0, diffuse_bind_group, &[]);
             render_pass.set_bind_group(1, &self.camera_bind_group, &[]);
 
-            // render_pass.set_vertex_buffer(0, self.vertex_buffer.slice(..));
             render_pass.set_vertex_buffer(1, self.instance_buffer.slice(..));
-            // render_pass.set_index_buffer(self.index_buffer.slice(..), wgpu::IndexFormat::Uint16);
-
-            // render_pass.draw_indexed(0..self.num_indices, 0, 0..self.instances.len() as _);
 
             use super::model::DrawModel;
             render_pass

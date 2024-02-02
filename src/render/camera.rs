@@ -32,7 +32,7 @@ impl Camera {
         let proj = cgmath::perspective(cgmath::Deg(self.fovy), self.aspect, self.znear, self.zfar);
 
         // 3.
-        return OPENGL_TO_WGPU_MATRIX * proj * view;
+        OPENGL_TO_WGPU_MATRIX * proj * view
     }
 }
 
@@ -95,14 +95,14 @@ impl CameraController {
     }
 
     pub fn process_events(&mut self, event: &WindowEvent) -> bool {
-        let ret = match event {
+        match event {
             WindowEvent::MouseInput {
                 state,
                 button: MouseButton::Right,
                 ..
             } => {
                 self.is_mouse_right_pressed = *state == ElementState::Pressed;
-                false
+                true
             }
             WindowEvent::CursorMoved { position, .. } => {
                 if self.is_mouse_right_pressed {
@@ -111,13 +111,13 @@ impl CameraController {
                 }
                 true
             }
-            WindowEvent::MouseWheel { delta, .. } => match delta {
-                winit::event::MouseScrollDelta::LineDelta(lines, rows) => {
-                    println!("lines<{:?}>, rows<{:?}>", lines, rows);
-                    true
-                }
-                _ => false,
-            },
+            // WindowEvent::MouseWheel { delta, .. } => match delta {
+            //     winit::event::MouseScrollDelta::LineDelta(lines, rows) => {
+            //         println!("lines<{:?}>, rows<{:?}>", lines, rows);
+            //         true
+            //     }
+            //     _ => false,
+            // },
             WindowEvent::KeyboardInput {
                 input:
                     KeyboardInput {
@@ -157,65 +157,59 @@ impl CameraController {
                 }
             }
             _ => false,
-        };
-        println!("set camera");
+        }
+        // println!("set camera");
         // println!("{:?}", self);
-        ret
     }
 
-    pub fn camera_wheel_move(&self, camera: &mut Camera, forward: f32, left: f32) {
-        use cgmath::InnerSpace;
-        let forward = camera.target - camera.eye;
-        let forward_norm = forward.normalize();
-        let forward_mag = forward.magnitude();
-        let up_norm = camera.up.normalize();
+    // pub fn camera_wheel_move(&self, camera: &mut Camera, forward: f32, left: f32) {
+    //     use cgmath::InnerSpace;
+    //     let forward = camera.target - camera.eye;
+    //     let forward_norm = forward.normalize();
+    //     let up_norm = camera.up.normalize();
 
-        // Prevents glitching when the camera gets too close to the
-        // center of the scene.
-        if self.is_forward_pressed {
-            camera.eye += forward_norm * self.speed;
-        }
-        if self.is_backward_pressed {
-            camera.eye -= forward_norm * self.speed;
-        }
+    //     // Prevents glitching when the camera gets too close to the
+    //     // center of the scene.
+    //     if self.is_forward_pressed {
+    //         camera.eye += forward_norm * self.speed;
+    //     }
+    //     if self.is_backward_pressed {
+    //         camera.eye -= forward_norm * self.speed;
+    //     }
 
-        let right = forward_norm.cross(camera.up);
+    //     let right = forward_norm.cross(camera.up);
 
-        // Redo radius calc in case the forward/backward is pressed.
-        let forward = camera.target - camera.eye;
-        let forward_mag = forward.magnitude();
+    //     if self.is_right_pressed {
+    //         // Rescale the distance between the target and the eye so
+    //         // that it doesn't change. The eye, therefore, still
+    //         // lies on the circle made by the target and eye.
+    //         let right_move = right * self.speed;
+    //         camera.eye = camera.eye + right_move;
+    //         camera.target = camera.target + right_move;
+    //     }
+    //     if self.is_left_pressed {
+    //         let right_move = -right * self.speed;
+    //         camera.eye = camera.eye + right_move;
+    //         camera.target = camera.target + right_move;
+    //     }
 
-        if self.is_right_pressed {
-            // Rescale the distance between the target and the eye so
-            // that it doesn't change. The eye, therefore, still
-            // lies on the circle made by the target and eye.
-            let right_move = right * self.speed;
-            camera.eye = camera.eye + right_move;
-            camera.target = camera.target + right_move;
-        }
-        if self.is_left_pressed {
-            let right_move = -right * self.speed;
-            camera.eye = camera.eye + right_move;
-            camera.target = camera.target + right_move;
-        }
-
-        if self.is_up_pressed {
-            let up_move = up_norm * self.speed;
-            camera.eye = camera.eye + up_move;
-            camera.target = camera.target + up_move;
-        }
-        if self.is_down_pressed {
-            let up_move = -up_norm * self.speed;
-            camera.eye = camera.eye + up_move;
-            camera.target = camera.target + up_move;
-        }
-    }
+    //     if self.is_up_pressed {
+    //         let up_move = up_norm * self.speed;
+    //         camera.eye = camera.eye + up_move;
+    //         camera.target = camera.target + up_move;
+    //     }
+    //     if self.is_down_pressed {
+    //         let up_move = -up_norm * self.speed;
+    //         camera.eye = camera.eye + up_move;
+    //         camera.target = camera.target + up_move;
+    //     }
+    // }
 
     pub fn update_camera(&mut self, camera: &mut Camera) {
         use cgmath::InnerSpace;
         let forward = camera.target - camera.eye;
         let forward_norm = forward.normalize();
-        let forward_mag = forward.magnitude();
+        // let forward_mag = forward.magnitude();
         let up_norm = camera.up.normalize();
 
         // Prevents glitching when the camera gets too close to the
@@ -232,37 +226,37 @@ impl CameraController {
         let right = forward_norm.cross(camera.up);
 
         // Redo radius calc in case the forward/backward is pressed.
-        let forward = camera.target - camera.eye;
-        let forward_mag = forward.magnitude();
+        // let forward = camera.target - camera.eye;
+        // let forward_mag = forward.magnitude();
 
         if self.is_right_pressed {
             // Rescale the distance between the target and the eye so
             // that it doesn't change. The eye, therefore, still
             // lies on the circle made by the target and eye.
             let right_move = right * self.speed;
-            camera.eye = camera.eye + right_move;
-            camera.target = camera.target + right_move;
+            camera.eye += right_move;
+            camera.target += right_move;
             // camera.eye = camera.target - (forward + right * self.speed).normalize() * forward_mag;
         }
         if self.is_left_pressed {
             // camera.eye = camera.target - (forward - right * self.speed).normalize() * forward_mag;
             let right_move = -right * self.speed;
-            camera.eye = camera.eye + right_move;
-            camera.target = camera.target + right_move;
+            camera.eye += right_move;
+            camera.target += right_move;
         }
 
         if self.is_up_pressed {
             let up_move = up_norm * self.speed;
-            camera.eye = camera.eye + up_move;
-            camera.target = camera.target + up_move;
+            camera.eye += up_move;
+            camera.target += up_move;
         }
         if self.is_down_pressed {
             let up_move = -up_norm * self.speed;
-            camera.eye = camera.eye + up_move;
-            camera.target = camera.target + up_move;
+            camera.eye += up_move;
+            camera.target += up_move;
         }
 
-        // width height stands for 360 degrees
+        // Mouse movement. Width height stands for 360 degrees
         if let Some(new_position_in) = self.new_position {
             if let Some(old_position_in) = self.old_position {
                 let move_x = (new_position_in.x - old_position_in.x) as f32
@@ -278,11 +272,15 @@ impl CameraController {
 
                 let move_x_rad = cgmath::Rad(move_x);
                 let move_y_rad = cgmath::Rad(move_y);
-                let dir_vec = camera.target - camera.eye;
+                let dir_vec = (camera.target - camera.eye).normalize();
 
-                let rot_quat =
-                    Quaternion::from_angle_y(-move_x_rad) * Quaternion::from_angle_x(-move_y_rad);
+                let rot_quat = Quaternion::from_angle_y(-move_x_rad)
+                    * Quaternion::from_axis_angle(right, -move_y_rad);
                 let new_dir_vec = rot_quat.rotate_vector(dir_vec);
+                // println!(
+                //     "rotate dir. old<{:?}> right<{:?}> move_x<{:?}>, move_y<{:?}>, new<{:?}>",
+                //     dir_vec, right, move_x, move_y, new_dir_vec
+                // );
 
                 camera.target = camera.eye + new_dir_vec;
             }
@@ -290,6 +288,6 @@ impl CameraController {
         self.old_position = self.new_position;
         self.new_position = None;
 
-        println!("update camera");
+        // println!("update camera");
     }
 }
