@@ -1,7 +1,7 @@
 use crate::render::model::ModelVertex;
 use cgmath::{InnerSpace, Rotation3, Zero};
 use wgpu::util::DeviceExt;
-use winit::event::{ElementState, KeyboardInput, VirtualKeyCode, WindowEvent};
+use winit::event::WindowEvent;
 use winit::window::Window;
 
 use super::camera::{Camera, CameraController, CameraUniform};
@@ -19,10 +19,6 @@ pub struct State {
     clear_color: wgpu::Color,
 
     render_pipeline: wgpu::RenderPipeline,
-
-    diffuse_bind_group: wgpu::BindGroup,
-    diffuse_bind_group2: wgpu::BindGroup,
-    diffuse_texture_switch: bool,
 
     camera: Camera,
     camera_uniform: CameraUniform,
@@ -95,12 +91,6 @@ impl State {
         };
         surface.configure(&device, &config);
 
-        let diffuse_bytes = include_bytes!("resources/happy-tree.png");
-        let diffuse_bytes2 = include_bytes!("resources/sad-tree.png");
-
-        let diffuse_texture =
-            texture::Texture::from_bytes(&device, &queue, diffuse_bytes, "happy-tree.png").unwrap();
-
         let texture_bind_group_layout =
             device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
                 entries: &[
@@ -125,64 +115,6 @@ impl State {
                 ],
                 label: Some("texture_bind_group_layout"),
             });
-
-        let diffuse_bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
-            layout: &texture_bind_group_layout,
-            entries: &[
-                wgpu::BindGroupEntry {
-                    binding: 0,
-                    resource: wgpu::BindingResource::TextureView(&diffuse_texture.view),
-                },
-                wgpu::BindGroupEntry {
-                    binding: 1,
-                    resource: wgpu::BindingResource::Sampler(&diffuse_texture.sampler),
-                },
-            ],
-            label: Some("diffuse_bind_group"),
-        });
-
-        let diffuse_texture2 =
-            texture::Texture::from_bytes(&device, &queue, diffuse_bytes2, "sad-tree.png").unwrap();
-
-        let texture_bind_group_layout2 =
-            device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
-                entries: &[
-                    wgpu::BindGroupLayoutEntry {
-                        binding: 0,
-                        visibility: wgpu::ShaderStages::FRAGMENT,
-                        ty: wgpu::BindingType::Texture {
-                            multisampled: false,
-                            view_dimension: wgpu::TextureViewDimension::D2,
-                            sample_type: wgpu::TextureSampleType::Float { filterable: true },
-                        },
-                        count: None,
-                    },
-                    wgpu::BindGroupLayoutEntry {
-                        binding: 1,
-                        visibility: wgpu::ShaderStages::FRAGMENT,
-                        // This should match the filterable field of the
-                        // corresponding Texture entry above.
-                        ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Filtering),
-                        count: None,
-                    },
-                ],
-                label: Some("texture_bind_group_layout2"),
-            });
-
-        let diffuse_bind_group2 = device.create_bind_group(&wgpu::BindGroupDescriptor {
-            layout: &texture_bind_group_layout2,
-            entries: &[
-                wgpu::BindGroupEntry {
-                    binding: 0,
-                    resource: wgpu::BindingResource::TextureView(&diffuse_texture2.view),
-                },
-                wgpu::BindGroupEntry {
-                    binding: 1,
-                    resource: wgpu::BindingResource::Sampler(&diffuse_texture2.sampler),
-                },
-            ],
-            label: Some("diffuse_bind_group2"),
-        });
 
         let clear_color = wgpu::Color {
             r: 0.1,
@@ -292,21 +224,6 @@ impl State {
             multiview: None, // 5.
         });
 
-        // let vertex_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-        //     label: Some("Vertex Buffer"),
-        //     contents: bytemuck::cast_slice(VERTICES),
-        //     usage: wgpu::BufferUsages::VERTEX,
-        // });
-
-        // let index_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-        //     label: Some("Index Buffer"),
-        //     contents: bytemuck::cast_slice(INDICES),
-        //     usage: wgpu::BufferUsages::INDEX,
-        // });
-
-        // let num_indices = INDICES.len() as u32;
-        let diffuse_texture_switch = true;
-
         let camera_controller = CameraController::new(0.2, 1.0, &size);
 
         // instances
@@ -337,7 +254,7 @@ impl State {
         for i in 0..(instances_len / 2) {
             instances.swap(i, instances_len - 1 - i);
         }
-        println!("instance vec after: {:?}", instances);
+        // println!("instance vec after: {:?}", instances);
 
         let instance_data = instances.iter().map(Instance::to_raw).collect::<Vec<_>>();
         let instance_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
@@ -363,9 +280,6 @@ impl State {
             size,
             clear_color,
             render_pipeline,
-            diffuse_bind_group,
-            diffuse_bind_group2,
-            diffuse_texture_switch,
             camera,
             camera_uniform,
             camera_buffer,
@@ -395,29 +309,7 @@ impl State {
     }
 
     pub fn input(&mut self, event: &WindowEvent) -> bool {
-        if self.camera_controller.process_events(event) {
-            return true;
-        }
-        match event {
-            WindowEvent::KeyboardInput {
-                input:
-                    KeyboardInput {
-                        state: ElementState::Pressed,
-                        virtual_keycode: Some(VirtualKeyCode::Space),
-                        ..
-                    },
-                ..
-            } => {
-                self.diffuse_texture_switch = !self.diffuse_texture_switch;
-                true
-            }
-            _ => false,
-        }
-        // if need_render {
-        //     self.update();
-        //     self.render().unwrap();
-        // }
-        // true
+        self.camera_controller.process_events(event)
     }
 
     pub fn update(&mut self) {
@@ -463,19 +355,17 @@ impl State {
             });
 
             render_pass.set_pipeline(&self.render_pipeline);
-            let diffuse_bind_group = if self.diffuse_texture_switch {
-                &self.diffuse_bind_group
-            } else {
-                &self.diffuse_bind_group2
-            };
-            render_pass.set_bind_group(0, diffuse_bind_group, &[]);
-            render_pass.set_bind_group(1, &self.camera_bind_group, &[]);
-
             render_pass.set_vertex_buffer(1, self.instance_buffer.slice(..));
 
             use super::model::DrawModel;
-            render_pass
-                .draw_mesh_instanced(&self.obj_model.meshes[0], 0..self.instances.len() as u32);
+            let mesh = &self.obj_model.meshes[0];
+            let material = &self.obj_model.materials[mesh.material];
+            render_pass.draw_mesh_instanced(
+                mesh,
+                material,
+                0..self.instances.len() as u32,
+                &self.camera_bind_group,
+            )
         }
 
         self.queue.submit(std::iter::once(encoder.finish()));
