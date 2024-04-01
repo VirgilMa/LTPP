@@ -5,6 +5,12 @@ version = "0.1.0"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[[bin]]
+name = "ltpp_run"
+
 [dependencies]
 anyhow = "1.0.75"
 bytemuck = {version = "1.12", features = ["derive"]}
@@ -13,22 +19,26 @@ cgmath = "0.18.0"
 chrono = "0.4.31"
 # env_logger = "0.10.1"
 image = "0.24.7"
-log = "0.4.20"
+log = "0.4"
 pollster = "0.3.0"
 timer = "0.2.0"
 tobj = {version = "3.2.1", features = ["async"]}
-wgpu = "0.17.0"
-winit = "0.28.6"
+wgpu = "0.18"
+winit = "0.28"
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
-# Other dependencies
-reqwest = {version = "0.11"}
-web-sys = {version = "0.3", features = [
-  "Document",
-  "Window",
-  "Element",
-  "Location",
+console_error_panic_hook = "0.1.6"
+console_log = "1.0"
+wgpu = { version = "0.18", features = ["webgl"]}
+wasm-bindgen = "0.2"
+wasm-bindgen-futures = "0.4.30"
+web-sys = { version = "0.3", features = [
+    "Document",
+    "Window",
+    "Element",
+    "Location",
 ]}
+reqwest = "0.12"
 
 [build-dependencies]
 anyhow = "1.0"
