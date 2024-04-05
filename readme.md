@@ -13,3 +13,4 @@ Install Rust and run `Cargo run` in the repository.
 - [ ] a simple physics engine
 - [ ] a super ball considering torque
 - [ ] water simulation (both physics and rendering)
+- [ ] support skeleton and skeleton animation
