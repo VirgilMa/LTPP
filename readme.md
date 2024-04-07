@@ -22,3 +22,4 @@ Open index.html.
 - [ ] a simple physics engine
 - [ ] a super ball considering torque
 - [ ] water simulation (both physics and rendering)
+- [ ] support skeleton and skeleton animation
