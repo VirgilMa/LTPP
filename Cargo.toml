@@ -17,7 +17,7 @@ bytemuck = {version = "1.12", features = ["derive"]}
 cfg-if = "1.0.0"
 cgmath = "0.18.0"
 chrono = "0.4.31"
-# env_logger = "0.10.1"
+env_logger = "0.10.1"
 image = "0.24.7"
 log = "0.4"
 pollster = "0.3.0"

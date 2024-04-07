@@ -4,6 +4,15 @@
 
 Install Rust and run `Cargo run` in the repository.
 
+### wasm start
+
+```rust
+cargo install wasm-pack
+wasm-pack build --release --target web
+```
+
+Open index.html.
+
 ## TODO
 
 - [X] camera simple movement
