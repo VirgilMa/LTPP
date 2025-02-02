@@ -1,3 +1,5 @@
+use std::sync::Arc;
+
 use crate::render::model::ModelVertex;
 use cgmath::{InnerSpace, Rotation3, Zero};
 use wgpu::util::DeviceExt;
@@ -9,13 +11,13 @@ use super::{lib::*, resource, texture};
 
 use super::model::Vertex;
 
-pub struct State {
-    surface: wgpu::Surface,
+pub struct State<'a> {
+    surface: wgpu::Surface<'a>,
     device: wgpu::Device,
     queue: wgpu::Queue,
     config: wgpu::SurfaceConfiguration,
     pub size: winit::dpi::PhysicalSize<u32>,
-    window: Window,
+    window: Arc<Window>,
     clear_color: wgpu::Color,
 
     render_pipeline: wgpu::RenderPipeline,
@@ -33,16 +35,12 @@ pub struct State {
     obj_model: super::model::Model,
 }
 
-impl State {
-    pub async fn new(window: Window) -> Self {
+impl<'a> State<'a> {
+    pub async fn new(window: Arc<Window>) -> Self {
         let size = window.inner_size();
 
-        let instance = wgpu::Instance::new(wgpu::InstanceDescriptor {
-            backends: wgpu::Backends::all(),
-            ..Default::default()
-        });
-
-        let surface = unsafe { instance.create_surface(&window) }.unwrap();
+        let instance = wgpu::Instance::default();
+        let surface = instance.create_surface(window.clone()).unwrap();
 
         let adapter = instance
             .request_adapter(&wgpu::RequestAdapterOptions {
@@ -54,18 +52,7 @@ impl State {
             .unwrap();
 
         let (device, queue) = adapter
-            .request_device(
-                &wgpu::DeviceDescriptor {
-                    features: wgpu::Features::empty(),
-                    limits: if cfg!(target_arch = "wasm32") {
-                        wgpu::Limits::downlevel_webgl2_defaults()
-                    } else {
-                        wgpu::Limits::default()
-                    },
-                    label: None,
-                },
-                None,
-            )
+            .request_device(&wgpu::DeviceDescriptor::default(), None)
             .await
             .unwrap();
 
@@ -85,6 +72,7 @@ impl State {
             format: surface_format,
             width: size.width,
             height: size.height,
+            desired_maximum_frame_latency: 1,
             present_mode: surface_caps.present_modes[0],
             alpha_mode: surface_caps.alpha_modes[0],
             view_formats: vec![],
@@ -183,13 +171,15 @@ impl State {
             layout: Some(&render_pipeline_layout),
             vertex: wgpu::VertexState {
                 module: &shader,
-                entry_point: "vs_main",                               // 1.
+                entry_point: Some("vs_main"),                               // 1.
+                compilation_options: wgpu::PipelineCompilationOptions::default(),
                 buffers: &[ModelVertex::desc(), InstanceRaw::desc()], // 2.
             },
             fragment: Some(wgpu::FragmentState {
                 // 3.
                 module: &shader,
-                entry_point: "fs_main",
+                entry_point: Some("fs_main"),
+                compilation_options: wgpu::PipelineCompilationOptions::default(),
                 targets: &[Some(wgpu::ColorTargetState {
                     // 4.
                     format: config.format,
@@ -222,6 +212,7 @@ impl State {
                 alpha_to_coverage_enabled: false, // 4.
             },
             multiview: None, // 5.
+            cache: None,
         });
 
         let camera_controller = CameraController::new(0.2, 1.0, &size);
@@ -272,7 +263,7 @@ impl State {
                 .unwrap();
 
         Self {
-            window,
+            window: window.clone(),
             surface,
             device,
             queue,

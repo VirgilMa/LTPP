@@ -7,6 +7,7 @@ cfg_if::cfg_if! {
 }
 
 mod render;
+pub mod objmgr;
 
 #[cfg_attr(target_arch = "wasm32", wasm_bindgen(start))]
 pub fn run() {

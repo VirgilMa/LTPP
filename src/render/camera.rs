@@ -3,7 +3,8 @@ use std::f32::consts::PI;
 use cgmath::{Quaternion, Rotation, Rotation3};
 use winit::{
     dpi::{PhysicalPosition, PhysicalSize},
-    event::{ElementState, KeyboardInput, MouseButton, VirtualKeyCode, WindowEvent},
+    event::{ElementState, KeyEvent, MouseButton, WindowEvent},
+    keyboard::{KeyCode, PhysicalKey},
 };
 
 #[rustfmt::skip]
@@ -119,37 +120,37 @@ impl CameraController {
             //     _ => false,
             // },
             WindowEvent::KeyboardInput {
-                input:
-                    KeyboardInput {
+                event:
+                    KeyEvent {
                         state,
-                        virtual_keycode: Some(keycode),
+                        physical_key,
                         ..
                     },
                 ..
             } => {
                 let is_pressed = *state == ElementState::Pressed;
-                match keycode {
-                    VirtualKeyCode::W | VirtualKeyCode::Up => {
+                match physical_key {
+                    PhysicalKey::Code(KeyCode::KeyW) | PhysicalKey::Code(KeyCode::ArrowUp) => {
                         self.is_forward_pressed = is_pressed;
                         true
                     }
-                    VirtualKeyCode::A | VirtualKeyCode::Left => {
+                    PhysicalKey::Code(KeyCode::KeyA) | PhysicalKey::Code(KeyCode::ArrowLeft) => {
                         self.is_left_pressed = is_pressed;
                         true
                     }
-                    VirtualKeyCode::S | VirtualKeyCode::Down => {
+                    PhysicalKey::Code(KeyCode::KeyS) | PhysicalKey::Code(KeyCode::ArrowDown) => {
                         self.is_backward_pressed = is_pressed;
                         true
                     }
-                    VirtualKeyCode::D | VirtualKeyCode::Right => {
+                    PhysicalKey::Code(KeyCode::KeyD) | PhysicalKey::Code(KeyCode::ArrowRight) => {
                         self.is_right_pressed = is_pressed;
                         true
                     }
-                    VirtualKeyCode::Q => {
+                    PhysicalKey::Code(KeyCode::KeyQ) => {
                         self.is_up_pressed = is_pressed;
                         true
                     }
-                    VirtualKeyCode::E => {
+                    PhysicalKey::Code(KeyCode::KeyE) => {
                         self.is_down_pressed = is_pressed;
                         true
                     }
@@ -158,8 +159,6 @@ impl CameraController {
             }
             _ => false,
         }
-        // println!("set camera");
-        // println!("{:?}", self);
     }
 
     // pub fn camera_wheel_move(&self, camera: &mut Camera, forward: f32, left: f32) {
