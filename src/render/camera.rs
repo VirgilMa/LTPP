@@ -3,7 +3,7 @@ use std::f32::consts::PI;
 use cgmath::{Quaternion, Rotation, Rotation3};
 use winit::{
     dpi::{PhysicalPosition, PhysicalSize},
-    event::{ElementState, KeyEvent, MouseButton, WindowEvent},
+    event::{ElementState, KeyEvent, MouseButton, MouseScrollDelta, TouchPhase, WindowEvent},
     keyboard::{KeyCode, PhysicalKey},
 };
 
@@ -69,6 +69,7 @@ pub struct CameraController {
     is_right_pressed: bool,
     is_up_pressed: bool,
     is_down_pressed: bool,
+    scroll_val: f32,
 
     is_mouse_right_pressed: bool,
     mouse_speed: f32,
@@ -88,6 +89,7 @@ impl CameraController {
             is_up_pressed: false,
             is_down_pressed: false,
             is_mouse_right_pressed: false,
+            scroll_val: 0.0,
             old_position: None,
             new_position: None,
             mouse_speed,
@@ -112,13 +114,18 @@ impl CameraController {
                 }
                 true
             }
-            // WindowEvent::MouseWheel { delta, .. } => match delta {
-            //     winit::event::MouseScrollDelta::LineDelta(lines, rows) => {
-            //         println!("lines<{:?}>, rows<{:?}>", lines, rows);
-            //         true
-            //     }
-            //     _ => false,
-            // },
+            WindowEvent::MouseWheel { delta, phase, .. } => {
+                if *phase == TouchPhase::Moved {
+                    match delta {
+                        MouseScrollDelta::LineDelta(_, vert) => {
+                            self.scroll_val += vert;
+                        }
+                        _ => {}
+                    }
+                }
+                println!("mouse wheel: {:?} phase<{:?}>", delta, phase);
+                true
+            }
             WindowEvent::KeyboardInput {
                 event:
                     KeyEvent {
@@ -161,49 +168,6 @@ impl CameraController {
         }
     }
 
-    // pub fn camera_wheel_move(&self, camera: &mut Camera, forward: f32, left: f32) {
-    //     use cgmath::InnerSpace;
-    //     let forward = camera.target - camera.eye;
-    //     let forward_norm = forward.normalize();
-    //     let up_norm = camera.up.normalize();
-
-    //     // Prevents glitching when the camera gets too close to the
-    //     // center of the scene.
-    //     if self.is_forward_pressed {
-    //         camera.eye += forward_norm * self.speed;
-    //     }
-    //     if self.is_backward_pressed {
-    //         camera.eye -= forward_norm * self.speed;
-    //     }
-
-    //     let right = forward_norm.cross(camera.up);
-
-    //     if self.is_right_pressed {
-    //         // Rescale the distance between the target and the eye so
-    //         // that it doesn't change. The eye, therefore, still
-    //         // lies on the circle made by the target and eye.
-    //         let right_move = right * self.speed;
-    //         camera.eye = camera.eye + right_move;
-    //         camera.target = camera.target + right_move;
-    //     }
-    //     if self.is_left_pressed {
-    //         let right_move = -right * self.speed;
-    //         camera.eye = camera.eye + right_move;
-    //         camera.target = camera.target + right_move;
-    //     }
-
-    //     if self.is_up_pressed {
-    //         let up_move = up_norm * self.speed;
-    //         camera.eye = camera.eye + up_move;
-    //         camera.target = camera.target + up_move;
-    //     }
-    //     if self.is_down_pressed {
-    //         let up_move = -up_norm * self.speed;
-    //         camera.eye = camera.eye + up_move;
-    //         camera.target = camera.target + up_move;
-    //     }
-    // }
-
     pub fn update_camera(&mut self, camera: &mut Camera) {
         use cgmath::InnerSpace;
         let forward = camera.target - camera.eye;
@@ -213,6 +177,11 @@ impl CameraController {
 
         // Prevents glitching when the camera gets too close to the
         // center of the scene.
+        if self.scroll_val != 0.0 {
+            camera.eye += forward_norm * self.speed * self.scroll_val;
+            camera.target += forward_norm * self.speed * self.scroll_val;
+            self.scroll_val = 0.0;
+        }
         if self.is_forward_pressed {
             camera.eye += forward_norm * self.speed;
             camera.target += forward_norm * self.speed;
