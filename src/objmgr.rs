@@ -59,7 +59,6 @@ impl PhysicalWorld {
     pub fn update(&mut self, delta_time: f32) {
         let obj_len = self.objs.len();
 
-
         for i in 0..obj_len {
             let s1 = &(self.objs[i]);
             for j in (i + 1)..obj_len {

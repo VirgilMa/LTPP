@@ -2,13 +2,13 @@ use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use super::state::State;
-use imgui::Context;
+use imgui::{Context, FontSource, MouseCursor};
+use imgui_wgpu::{Renderer, RendererConfig};
 use imgui_winit_support::{HiDpiMode, WinitPlatform};
-use winit::event::KeyEvent;
-use winit::keyboard;
 use winit::{
-    event::WindowEvent,
+    event::{KeyEvent, WindowEvent},
     event_loop::{ActiveEventLoop, EventLoop},
+    keyboard,
 };
 
 struct FpsCounter {
@@ -34,15 +34,96 @@ impl FpsCounter {
     }
 }
 
+struct ImguiState {
+    context: imgui::Context,
+    platform: WinitPlatform,
+    renderer: Renderer,
+    clear_color: wgpu::Color,
+    demo_open: bool,
+    last_frame: Instant,
+    last_cursor: Option<MouseCursor>,
+}
+
 struct App<'a> {
     fps_counter: FpsCounter,
     state: State<'a>,
+    // winit_platform: WinitPlatform,
+    // imgui_context: Context,
+    imgui: Option<ImguiState>,
 }
 
 impl<'a> App<'a> {
     pub fn new(state: State<'a>) -> App<'a> {
         let fps_counter = FpsCounter::new();
-        Self { fps_counter, state }
+        // let mut imgui_context = Context::create();
+        // let mut winit_platform = WinitPlatform::new(&mut imgui_context); // step 1
+        // winit_platform.attach_window(imgui_context.io_mut(), &state.window(), HiDpiMode::Default); // step 2
+        Self {
+            fps_counter,
+            state,
+            imgui: None,
+            // winit_platform,
+            // imgui_context,
+        }
+    }
+
+    pub fn setup_imgui(&mut self) {
+        let mut context = imgui::Context::create();
+        let mut platform = imgui_winit_support::WinitPlatform::new(&mut context);
+        platform.attach_window(
+            context.io_mut(),
+            self.state.window(),
+            imgui_winit_support::HiDpiMode::Default,
+        );
+        context.set_ini_filename(None);
+
+        let hidpi_factor = 1.0;
+        let font_size = (13.0 * hidpi_factor) as f32;
+        context.io_mut().font_global_scale = (1.0 / hidpi_factor) as f32;
+
+        context.fonts().add_font(&[FontSource::DefaultFontData {
+            config: Some(imgui::FontConfig {
+                oversample_h: 1,
+                pixel_snap_h: true,
+                size_pixels: font_size,
+                ..Default::default()
+            }),
+        }]);
+
+        //
+        // Set up dear imgui wgpu renderer
+        //
+        let clear_color = wgpu::Color {
+            r: 0.1,
+            g: 0.2,
+            b: 0.3,
+            a: 1.0,
+        };
+
+        let renderer_config = RendererConfig {
+            texture_format: self.state.config.format,
+            ..Default::default()
+        };
+
+        let renderer = Renderer::new(
+            &mut context,
+            &self.state.device,
+            &self.state.queue,
+            renderer_config,
+        );
+        let last_frame = Instant::now();
+        let last_cursor = None;
+        let demo_open = true;
+
+        self.imgui = Some(ImguiState {
+            context,
+            platform,
+            renderer,
+            clear_color,
+            demo_open,
+            last_frame,
+            last_cursor,
+        })
     }
 }
 
@@ -52,6 +133,10 @@ impl<'a> winit::application::ApplicationHandler for App<'a> {
     }
 
     fn about_to_wait(&mut self, _event_loop: &ActiveEventLoop) {
+        // self.winit_platform
+        //     .prepare_frame(self.imgui_context.io_mut(), &self.state.window()) // step 4
+        //     .expect("Failed to prepare frame");
+
         self.state.window().request_redraw();
     }
 
@@ -83,6 +168,8 @@ impl<'a> winit::application::ApplicationHandler for App<'a> {
                     Err(wgpu::SurfaceError::OutOfMemory) => event_loop.exit(),
                     Err(e) => eprintln!("{:?}", e),
                 };
+                // let imgui = &mut self.imgui_context;
+                // let drawData = imgui.render();
                 self.fps_counter.count();
             }
             WindowEvent::CloseRequested
@@ -103,6 +190,12 @@ impl<'a> winit::application::ApplicationHandler for App<'a> {
             }
             _ => {} // }
         }
+
+        // self.winit_platform.handle_event::<()>(
+        //     self.imgui_context.io_mut(),
+        //     &self.state.window(),
+        //     &Event::WindowEvent { window_id, event },
+        // );
     }
 }
 
@@ -133,12 +226,6 @@ pub async fn render() {
             })
             .expect("Couldn't append canvas to document body.");
     }
-
-    // create a window
-
-    let mut imgui = Context::create();
-    let mut platform = WinitPlatform::new(&mut imgui); // step 1
-    platform.attach_window(imgui.io_mut(), &window, HiDpiMode::Default); // step 2
 
     let state = State::new(window.clone()).await;
     let mut app = App::new(state);

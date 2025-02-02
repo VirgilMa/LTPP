@@ -13,9 +13,9 @@ use super::model::Vertex;
 
 pub struct State<'a> {
     surface: wgpu::Surface<'a>,
-    device: wgpu::Device,
-    queue: wgpu::Queue,
-    config: wgpu::SurfaceConfiguration,
+    pub device: wgpu::Device,
+    pub queue: wgpu::Queue,
+    pub config: wgpu::SurfaceConfiguration,
     pub size: winit::dpi::PhysicalSize<u32>,
     window: Arc<Window>,
     clear_color: wgpu::Color,
@@ -171,7 +171,7 @@ impl<'a> State<'a> {
             layout: Some(&render_pipeline_layout),
             vertex: wgpu::VertexState {
                 module: &shader,
-                entry_point: Some("vs_main"),                               // 1.
+                entry_point: Some("vs_main"), // 1.
                 compilation_options: wgpu::PipelineCompilationOptions::default(),
                 buffers: &[ModelVertex::desc(), InstanceRaw::desc()], // 2.
             },
