@@ -6,7 +6,7 @@ use imgui::{Context, FontSource, MouseCursor};
 use imgui_wgpu::{Renderer, RendererConfig};
 use imgui_winit_support::{HiDpiMode, WinitPlatform};
 use winit::{
-    event::{KeyEvent, WindowEvent},
+    event::{Event, KeyEvent, WindowEvent},
     event_loop::{ActiveEventLoop, EventLoop},
     keyboard,
 };
@@ -54,17 +54,22 @@ struct App<'a> {
 
 impl<'a> App<'a> {
     pub fn new(state: State<'a>) -> App<'a> {
+        // setup state
         let fps_counter = FpsCounter::new();
         // let mut imgui_context = Context::create();
         // let mut winit_platform = WinitPlatform::new(&mut imgui_context); // step 1
         // winit_platform.attach_window(imgui_context.io_mut(), &state.window(), HiDpiMode::Default); // step 2
-        Self {
+
+        let mut app = Self {
             fps_counter,
             state,
             imgui: None,
             // winit_platform,
             // imgui_context,
-        }
+        };
+
+        app.setup_imgui();
+        app
     }
 
     pub fn setup_imgui(&mut self) {
@@ -125,6 +130,71 @@ impl<'a> App<'a> {
             last_cursor,
         })
     }
+
+    fn imgui_render(&mut self) {
+        let imgui = self.imgui.as_mut().unwrap();
+
+        let frame = match self.state.surface.get_current_texture() {
+            Ok(frame) => frame,
+            Err(e) => {
+                eprintln!("dropped frame: {e:?}");
+                return;
+            }
+        };
+
+        imgui
+            .platform
+            .prepare_frame(imgui.context.io_mut(), self.state.window())
+            .expect("imgui failed to prepare frame");
+
+        let ui = imgui.context.frame();
+
+        {
+            ui.show_demo_window(&mut imgui.demo_open);
+        }
+
+        let mut encoder = self
+            .state
+            .device
+            .create_command_encoder(&wgpu::CommandEncoderDescriptor { label: None });
+
+        imgui.platform.prepare_render(ui, self.state.window());
+        let view = frame
+            .texture
+            .create_view(&wgpu::TextureViewDescriptor::default());
+
+        match self.state.render(&view) {
+            Ok(_) => {}
+            Err(wgpu::SurfaceError::Lost) => self.state.resize(self.state.size),
+            // Err(wgpu::SurfaceError::OutOfMemory) => event_loop.exit(),
+            Err(e) => eprintln!("{:?}", e),
+        };
+
+        let mut rpass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+            color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                view: &view,
+                resolve_target: None,
+                ops: wgpu::Operations {
+                    load: wgpu::LoadOp::Load,
+                    // load: wgpu::LoadOp::Clear(imgui.clear_color),
+                    store: wgpu::StoreOp::Store,
+                },
+            })],
+            ..Default::default()
+        });
+        imgui
+            .renderer
+            .render(
+                imgui.context.render(),
+                &self.state.queue,
+                &self.state.device,
+                &mut rpass,
+            )
+            .expect("imgui render failed");
+        drop(rpass);
+        self.state.queue.submit(Some(encoder.finish()));
+        frame.present();
+    }
 }
 
 impl<'a> winit::application::ApplicationHandler for App<'a> {
@@ -162,14 +232,8 @@ impl<'a> winit::application::ApplicationHandler for App<'a> {
         match event {
             WindowEvent::RedrawRequested => {
                 self.state.update();
-                match self.state.render() {
-                    Ok(_) => {}
-                    Err(wgpu::SurfaceError::Lost) => self.state.resize(self.state.size),
-                    Err(wgpu::SurfaceError::OutOfMemory) => event_loop.exit(),
-                    Err(e) => eprintln!("{:?}", e),
-                };
-                // let imgui = &mut self.imgui_context;
-                // let drawData = imgui.render();
+                // todo: 感觉应该是不需要两个render
+                self.imgui_render();
                 self.fps_counter.count();
             }
             WindowEvent::CloseRequested
@@ -191,11 +255,12 @@ impl<'a> winit::application::ApplicationHandler for App<'a> {
             _ => {} // }
         }
 
-        // self.winit_platform.handle_event::<()>(
-        //     self.imgui_context.io_mut(),
-        //     &self.state.window(),
-        //     &Event::WindowEvent { window_id, event },
-        // );
+        let imgui = self.imgui.as_mut().unwrap();
+        imgui.platform.handle_event::<()>(
+            imgui.context.io_mut(),
+            &self.state.window(),
+            &Event::WindowEvent { window_id, event },
+        );
     }
 }
 

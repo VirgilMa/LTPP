@@ -114,18 +114,19 @@ impl CameraController {
                 }
                 true
             }
-            WindowEvent::MouseWheel { delta, phase, .. } => {
-                if *phase == TouchPhase::Moved {
-                    match delta {
-                        MouseScrollDelta::LineDelta(_, vert) => {
-                            self.scroll_val += vert;
-                        }
-                        _ => {}
-                    }
-                }
+            // todo: imgui use wheel
+            // WindowEvent::MouseWheel { delta, phase, .. } => {
+            //     if *phase == TouchPhase::Moved {
+            //         match delta {
+            //             MouseScrollDelta::LineDelta(_, vert) => {
+            //                 self.scroll_val += vert;
+            //             }
+            //             _ => {}
+            //         }
+            //     }
                 // println!("mouse wheel: {:?} phase<{:?}>", delta, phase);
-                true
-            }
+            //     true
+            // }
             WindowEvent::KeyboardInput {
                 event:
                     KeyEvent {

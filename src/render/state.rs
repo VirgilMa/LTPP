@@ -3,6 +3,7 @@ use std::sync::Arc;
 use crate::render::model::ModelVertex;
 use cgmath::{InnerSpace, Rotation3, Zero};
 use wgpu::util::DeviceExt;
+use wgpu::TextureView;
 use winit::event::WindowEvent;
 use winit::window::Window;
 
@@ -12,7 +13,7 @@ use super::{lib::*, resource, texture};
 use super::model::Vertex;
 
 pub struct State<'a> {
-    surface: wgpu::Surface<'a>,
+    pub surface: wgpu::Surface<'a>,
     pub device: wgpu::Device,
     pub queue: wgpu::Queue,
     pub config: wgpu::SurfaceConfiguration,
@@ -313,11 +314,11 @@ impl<'a> State<'a> {
         );
     }
 
-    pub fn render(&mut self) -> Result<(), wgpu::SurfaceError> {
-        let output = self.surface.get_current_texture()?;
-        let view = output
-            .texture
-            .create_view(&wgpu::TextureViewDescriptor::default());
+    pub fn render(&mut self, view: &TextureView) -> Result<(), wgpu::SurfaceError> {
+        // let output = self.surface.get_current_texture()?;
+        // let view = output
+        //     .texture
+        //     .create_view(&wgpu::TextureViewDescriptor::default());
         let mut encoder = self
             .device
             .create_command_encoder(&wgpu::CommandEncoderDescriptor {
@@ -362,7 +363,7 @@ impl<'a> State<'a> {
         }
 
         self.queue.submit(std::iter::once(encoder.finish()));
-        output.present();
+        // output.present();
         Ok(())
     }
 }
