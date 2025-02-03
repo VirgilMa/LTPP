@@ -3,7 +3,7 @@ use std::f32::consts::PI;
 use cgmath::{Quaternion, Rotation, Rotation3};
 use winit::{
     dpi::{PhysicalPosition, PhysicalSize},
-    event::{ElementState, KeyEvent, MouseButton, MouseScrollDelta, TouchPhase, WindowEvent},
+    event::{ElementState, KeyEvent, MouseButton, WindowEvent},
     keyboard::{KeyCode, PhysicalKey},
 };
 
@@ -114,7 +114,7 @@ impl CameraController {
                 }
                 true
             }
-            // todo: imgui use wheel
+            // disable temprarily, to wheel is used by imgui, todo: focus system
             // WindowEvent::MouseWheel { delta, phase, .. } => {
             //     if *phase == TouchPhase::Moved {
             //         match delta {

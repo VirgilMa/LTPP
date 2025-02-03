@@ -2,9 +2,10 @@ use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use super::state::State;
-use imgui::{Context, FontSource, MouseCursor};
+use imgui::FontSource;
 use imgui_wgpu::{Renderer, RendererConfig};
-use imgui_winit_support::{HiDpiMode, WinitPlatform};
+use imgui_winit_support::WinitPlatform;
+use wgpu::TextureView;
 use winit::{
     event::{Event, KeyEvent, WindowEvent},
     event_loop::{ActiveEventLoop, EventLoop},
@@ -38,34 +39,23 @@ struct ImguiState {
     context: imgui::Context,
     platform: WinitPlatform,
     renderer: Renderer,
-    clear_color: wgpu::Color,
     demo_open: bool,
-    last_frame: Instant,
-    last_cursor: Option<MouseCursor>,
 }
 
 struct App<'a> {
     fps_counter: FpsCounter,
     state: State<'a>,
-    // winit_platform: WinitPlatform,
-    // imgui_context: Context,
     imgui: Option<ImguiState>,
 }
 
 impl<'a> App<'a> {
     pub fn new(state: State<'a>) -> App<'a> {
-        // setup state
         let fps_counter = FpsCounter::new();
-        // let mut imgui_context = Context::create();
-        // let mut winit_platform = WinitPlatform::new(&mut imgui_context); // step 1
-        // winit_platform.attach_window(imgui_context.io_mut(), &state.window(), HiDpiMode::Default); // step 2
 
         let mut app = Self {
             fps_counter,
             state,
             imgui: None,
-            // winit_platform,
-            // imgui_context,
         };
 
         app.setup_imgui();
@@ -98,13 +88,6 @@ impl<'a> App<'a> {
         //
         // Set up dear imgui wgpu renderer
         //
-        let clear_color = wgpu::Color {
-            r: 0.1,
-            g: 0.2,
-            b: 0.3,
-            a: 1.0,
-        };
-
         let renderer_config = RendererConfig {
             texture_format: self.state.config.format,
             ..Default::default()
@@ -116,24 +99,17 @@ impl<'a> App<'a> {
             &self.state.queue,
             renderer_config,
         );
-        let last_frame = Instant::now();
-        let last_cursor = None;
         let demo_open = true;
 
         self.imgui = Some(ImguiState {
             context,
             platform,
             renderer,
-            clear_color,
             demo_open,
-            last_frame,
-            last_cursor,
         })
     }
 
-    fn imgui_render(&mut self) {
-        let imgui = self.imgui.as_mut().unwrap();
-
+    fn render(&mut self, event_loop: &winit::event_loop::ActiveEventLoop) {
         let frame = match self.state.surface.get_current_texture() {
             Ok(frame) => frame,
             Err(e) => {
@@ -141,7 +117,24 @@ impl<'a> App<'a> {
                 return;
             }
         };
+        let view = frame
+            .texture
+            .create_view(&wgpu::TextureViewDescriptor::default());
 
+        match self.state.scene_render(&view) {
+            Ok(_) => {}
+            Err(wgpu::SurfaceError::Lost) => self.state.resize(self.state.size),
+            Err(wgpu::SurfaceError::OutOfMemory) => event_loop.exit(),
+            Err(e) => eprintln!("{:?}", e),
+        };
+
+        self.imgui_render(&view);
+
+        frame.present();
+    }
+
+    fn imgui_render(&mut self, view: &TextureView) {
+        let imgui = self.imgui.as_mut().unwrap();
         imgui
             .platform
             .prepare_frame(imgui.context.io_mut(), self.state.window())
@@ -159,20 +152,10 @@ impl<'a> App<'a> {
             .create_command_encoder(&wgpu::CommandEncoderDescriptor { label: None });
 
         imgui.platform.prepare_render(ui, self.state.window());
-        let view = frame
-            .texture
-            .create_view(&wgpu::TextureViewDescriptor::default());
-
-        match self.state.render(&view) {
-            Ok(_) => {}
-            Err(wgpu::SurfaceError::Lost) => self.state.resize(self.state.size),
-            // Err(wgpu::SurfaceError::OutOfMemory) => event_loop.exit(),
-            Err(e) => eprintln!("{:?}", e),
-        };
 
         let mut rpass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
             color_attachments: &[Some(wgpu::RenderPassColorAttachment {
-                view: &view,
+                view,
                 resolve_target: None,
                 ops: wgpu::Operations {
                     load: wgpu::LoadOp::Load,
@@ -193,20 +176,13 @@ impl<'a> App<'a> {
             .expect("imgui render failed");
         drop(rpass);
         self.state.queue.submit(Some(encoder.finish()));
-        frame.present();
     }
 }
 
-impl<'a> winit::application::ApplicationHandler for App<'a> {
-    fn resumed(&mut self, event_loop: &winit::event_loop::ActiveEventLoop) {
-        // todo: make create window here
-    }
+impl winit::application::ApplicationHandler for App<'_> {
+    fn resumed(&mut self, _event_loop: &winit::event_loop::ActiveEventLoop) {}
 
     fn about_to_wait(&mut self, _event_loop: &ActiveEventLoop) {
-        // self.winit_platform
-        //     .prepare_frame(self.imgui_context.io_mut(), &self.state.window()) // step 4
-        //     .expect("Failed to prepare frame");
-
         self.state.window().request_redraw();
     }
 
@@ -232,8 +208,7 @@ impl<'a> winit::application::ApplicationHandler for App<'a> {
         match event {
             WindowEvent::RedrawRequested => {
                 self.state.update();
-                // todo: 感觉应该是不需要两个render
-                self.imgui_render();
+                self.render(event_loop);
                 self.fps_counter.count();
             }
             WindowEvent::CloseRequested
@@ -258,7 +233,7 @@ impl<'a> winit::application::ApplicationHandler for App<'a> {
         let imgui = self.imgui.as_mut().unwrap();
         imgui.platform.handle_event::<()>(
             imgui.context.io_mut(),
-            &self.state.window(),
+            self.state.window(),
             &Event::WindowEvent { window_id, event },
         );
     }
@@ -271,7 +246,7 @@ pub async fn render() {
         .with_title("code adventure")
         .with_inner_size(winit::dpi::LogicalSize::new(800, 600));
 
-    // todo
+    // todo: move "create window procedure" to resume
     let window = Arc::new(event_loop.create_window(window_attributes).unwrap());
 
     #[cfg(target_arch = "wasm32")]

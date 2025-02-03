@@ -36,7 +36,7 @@ pub struct State<'a> {
     obj_model: super::model::Model,
 }
 
-impl<'a> State<'a> {
+impl State<'_> {
     pub async fn new(window: Arc<Window>) -> Self {
         let size = window.inner_size();
 
@@ -314,11 +314,8 @@ impl<'a> State<'a> {
         );
     }
 
-    pub fn render(&mut self, view: &TextureView) -> Result<(), wgpu::SurfaceError> {
-        // let output = self.surface.get_current_texture()?;
-        // let view = output
-        //     .texture
-        //     .create_view(&wgpu::TextureViewDescriptor::default());
+    pub fn scene_render(&mut self, view: &TextureView) -> Result<(), wgpu::SurfaceError> {
+
         let mut encoder = self
             .device
             .create_command_encoder(&wgpu::CommandEncoderDescriptor {
@@ -329,7 +326,7 @@ impl<'a> State<'a> {
             let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
                 label: Some("Render Pass"),
                 color_attachments: &[Some(wgpu::RenderPassColorAttachment {
-                    view: &view,
+                    view,
                     resolve_target: None,
                     ops: wgpu::Operations {
                         load: wgpu::LoadOp::Clear(self.clear_color), // how to handle the color in the previous frame
@@ -363,7 +360,6 @@ impl<'a> State<'a> {
         }
 
         self.queue.submit(std::iter::once(encoder.finish()));
-        // output.present();
         Ok(())
     }
 }
