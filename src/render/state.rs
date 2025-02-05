@@ -29,11 +29,14 @@ pub struct State<'a> {
     camera_bind_group: wgpu::BindGroup,
     camera_controller: CameraController,
 
-    instances: Vec<Instance>,
+    obj_instances: Vec<Instance>,
     instance_buffer: wgpu::Buffer,
 
     depth_texture: super::texture::Texture,
     obj_model: super::model::Model,
+
+    sphere_model: super::model::Model,
+    sphere_instances: Vec<Instance>,
 }
 
 impl State<'_> {
@@ -220,7 +223,7 @@ impl State<'_> {
 
         // instances
         const SPACE_BETWEEN: f32 = 3.0;
-        let mut instances = (0..NUM_INSTANCE_PER_ROW)
+        let mut obj_instances = (0..NUM_INSTANCE_PER_ROW)
             .flat_map(|z| {
                 (0..NUM_INSTANCE_PER_ROW).map(move |x| {
                     let x = SPACE_BETWEEN * (x as f32 - NUM_INSTANCE_PER_ROW as f32 / 2.0);
@@ -242,13 +245,16 @@ impl State<'_> {
 
         // rotate vector to show the value of depth buffer
         // println!("instance vec orig: {:?}", instances);
-        let instances_len = instances.len();
+        let instances_len = obj_instances.len();
         for i in 0..(instances_len / 2) {
-            instances.swap(i, instances_len - 1 - i);
+            obj_instances.swap(i, instances_len - 1 - i);
         }
         // println!("instance vec after: {:?}", instances);
 
-        let instance_data = instances.iter().map(Instance::to_raw).collect::<Vec<_>>();
+        let instance_data = obj_instances
+            .iter()
+            .map(Instance::to_raw)
+            .collect::<Vec<_>>();
         let instance_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
             label: Some("Instance Buffer"),
             contents: bytemuck::cast_slice(&instance_data),
@@ -262,6 +268,9 @@ impl State<'_> {
             resource::load_model("cube.obj", &device, &queue, &texture_bind_group_layout)
                 .await
                 .unwrap();
+        
+        let sphere_intances;
+        let sphere_model;
 
         Self {
             window: window.clone(),
@@ -277,10 +286,12 @@ impl State<'_> {
             camera_buffer,
             camera_bind_group,
             camera_controller,
-            instances,
+            obj_instances,
             instance_buffer,
             depth_texture,
             obj_model,
+            sphere_model,
+            sphere_instances,
         }
     }
 
@@ -315,7 +326,6 @@ impl State<'_> {
     }
 
     pub fn scene_render(&mut self, view: &TextureView) -> Result<(), wgpu::SurfaceError> {
-
         let mut encoder = self
             .device
             .create_command_encoder(&wgpu::CommandEncoderDescriptor {
@@ -354,9 +364,11 @@ impl State<'_> {
             render_pass.draw_mesh_instanced(
                 mesh,
                 material,
-                0..self.instances.len() as u32,
+                0..self.obj_instances.len() as u32,
                 &self.camera_bind_group,
             )
+
+            // draw spheres
         }
 
         self.queue.submit(std::iter::once(encoder.finish()));
