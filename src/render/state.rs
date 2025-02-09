@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
 use crate::render::model::ModelVertex;
-use cgmath::{InnerSpace, Rotation3, Zero};
+use cgmath::{InnerSpace, Rotation3, Vector3, Zero};
 use wgpu::util::DeviceExt;
 use wgpu::TextureView;
 use winit::event::WindowEvent;
@@ -23,7 +23,7 @@ pub struct State<'a> {
 
     render_pipeline: wgpu::RenderPipeline,
 
-    camera: Camera,
+    pub camera: Camera,
     camera_uniform: CameraUniform,
     camera_buffer: wgpu::Buffer,
     camera_bind_group: wgpu::BindGroup,
@@ -268,9 +268,28 @@ impl State<'_> {
             resource::load_model("cube.obj", &device, &queue, &texture_bind_group_layout)
                 .await
                 .unwrap();
-        
-        let sphere_intances;
-        let sphere_model;
+
+        let mut sphere_instances: Vec<Instance> = vec![];
+        sphere_instances.insert(
+            0,
+            Instance {
+                position: Vector3 {
+                    x: 1.0f32,
+                    y: 1.0f32,
+                    z: 1.0f32,
+                },
+                rotation: cgmath::Quaternion::zero(),
+            },
+        );
+        let sphere_model = resource::generate_sphere_model(
+            &device,
+            &queue,
+            &texture_bind_group_layout,
+            10.0,
+            10,
+            10,
+        )
+        .await.unwrap();
 
         Self {
             window: window.clone(),

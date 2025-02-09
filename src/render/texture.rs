@@ -1,5 +1,5 @@
 use anyhow::*;
-use image::GenericImageView;
+use image::{DynamicImage, GenericImage, GenericImageView, ImageBuffer, Rgba};
 
 pub struct Texture {
     pub texture: wgpu::Texture,
@@ -62,6 +62,22 @@ impl Texture {
     ) -> Result<Self> {
         let img = image::load_from_memory(bytes)?;
         Self::from_image(device, queue, &img, Some(label))
+    }
+
+    pub fn pure_color_texture(
+        device: &wgpu::Device,
+        queue: &wgpu::Queue,
+        label: Option<&str>,
+        w: u32,
+        h: u32,
+        color: Rgba<u8>,
+    ) -> Result<Self> {
+        let mut img = ImageBuffer::new(w, h);
+        for (_, _, pixel) in img.enumerate_pixels_mut() {
+            *pixel = color;
+        }
+        let dyn_img = DynamicImage::ImageRgba8(img);
+        Self::from_image(device, queue, &dyn_img, label)
     }
 
     pub fn from_image(

@@ -1,9 +1,11 @@
-use std::io::{BufReader, Cursor};
-
+use super::{
+    model::{self, Material},
+    texture,
+};
 use cfg_if::cfg_if;
+use image::Rgba;
+use std::io::{BufReader, Cursor};
 use wgpu::util::DeviceExt;
-
-use super::{model, texture};
 
 #[cfg(target_arch = "wasm32")]
 fn format_url(file_name: &str) -> reqwest::Url {
@@ -156,4 +158,124 @@ pub async fn load_model(
     Ok(model::Model { meshes, materials })
 }
 
-// generate sphere model
+// 在你的资源加载模块（例如 resource.rs）中添加以下代码
+
+// 生成球体模型的函数
+pub async fn generate_sphere_model(
+    device: &wgpu::Device,
+    queue: &wgpu::Queue,
+    layout: &wgpu::BindGroupLayout,
+    radius: f32,
+    sectors: u32,
+    stacks: u32,
+) -> anyhow::Result<model::Model> {
+    // 生成球体顶点和索引数据
+    let (vertices, indices) = generate_sphere(radius, sectors, stacks);
+
+    let default_color = Rgba([255, 255, 255, 255]);
+    let default_texture = texture::Texture::pure_color_texture(
+        device,
+        queue,
+        Some("default_sphere_texture"),
+        800,
+        600,
+        default_color,
+    )?;
+
+    let bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
+        layout,
+        entries: &[
+            wgpu::BindGroupEntry {
+                binding: 0,
+                resource: wgpu::BindingResource::TextureView(&default_texture.view),
+            },
+            wgpu::BindGroupEntry {
+                binding: 1,
+                resource: wgpu::BindingResource::Sampler(&default_texture.sampler),
+            },
+        ],
+        label: None,
+    });
+
+    let materials = vec![model::Material {
+        name: "Sphere_Material".to_string(),
+        diffuse_texture: default_texture,
+        bind_group,
+    }];
+
+    // 创建顶点缓冲区
+    let vertex_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+        label: Some("Sphere Vertex Buffer"),
+        contents: bytemuck::cast_slice(&vertices),
+        usage: wgpu::BufferUsages::VERTEX,
+    });
+
+    // 创建索引缓冲区
+    let index_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+        label: Some("Sphere Index Buffer"),
+        contents: bytemuck::cast_slice(&indices),
+        usage: wgpu::BufferUsages::INDEX,
+    });
+
+    // 创建网格
+    let meshes = vec![model::Mesh {
+        name: "Sphere".to_string(),
+        vertex_buffer,
+        index_buffer,
+        num_elements: indices.len() as u32,
+        material: 0, // 使用第一个材质
+    }];
+
+    Ok(model::Model { meshes, materials })
+}
+
+// 球体生成核心逻辑
+fn generate_sphere(radius: f32, sectors: u32, stacks: u32) -> (Vec<model::ModelVertex>, Vec<u32>) {
+    let mut vertices = Vec::new();
+    let mut indices = Vec::new();
+    let pi = std::f32::consts::PI;
+
+    // 生成顶点
+    for i in 0..=stacks {
+        let phi = pi * i as f32 / stacks as f32; // 纬度 0~π
+        let y = radius * phi.cos();
+        let xy = radius * phi.sin();
+
+        for j in 0..=sectors {
+            let theta = 2.0 * pi * j as f32 / sectors as f32; // 经度 0~2π
+            let x = xy * theta.cos();
+            let z = xy * theta.sin();
+
+            // 纹理坐标
+            let s = theta / (2.0 * pi);
+            let t = phi / pi;
+
+            // 法线计算（归一化位置）
+            let normal = [x / radius, y / radius, z / radius];
+
+            vertices.push(model::ModelVertex {
+                position: [x, y, z],
+                tex_coords: [s, t],
+                normal,
+            });
+        }
+    }
+
+    // 生成索引
+    for i in 0..stacks {
+        for j in 0..sectors {
+            let first = (i * (sectors + 1) + j) as u32;
+            let second = first + sectors + 1;
+
+            indices.push(first);
+            indices.push(second);
+            indices.push(first + 1);
+
+            indices.push(second);
+            indices.push(second + 1);
+            indices.push(first + 1);
+        }
+    }
+
+    (vertices, indices)
+}

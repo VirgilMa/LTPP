@@ -143,7 +143,26 @@ impl<'a> App<'a> {
         let ui = imgui.context.frame();
 
         {
-            ui.show_demo_window(&mut imgui.demo_open);
+            // ui.show_demo_window(&mut imgui.demo_open);
+
+            let camera_pos = &self.state.camera.eye;
+            let camera_target= &self.state.camera.target;
+
+            // 创建一个 ImGui 窗口并显示相机位置
+            let window_pos = [0.0, 0.0];
+            ui.window("Info")
+                .size([300.0, 100.0], imgui::Condition::FirstUseEver)
+                .position(window_pos, imgui::Condition::FirstUseEver)
+                .build(|| {
+                    ui.text(format!(
+                        "Camera Position: ({:.2}, {:.2}, {:.2})",
+                        camera_pos.x, camera_pos.y, camera_pos.z
+                    ));
+                    ui.text(format!(
+                        "Camera Target: ({:.2}, {:.2}, {:.2})",
+                        camera_target.x, camera_target.y, camera_target.z
+                    ));
+                });
         }
 
         let mut encoder = self
