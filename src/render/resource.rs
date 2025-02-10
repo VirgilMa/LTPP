@@ -1,7 +1,4 @@
-use super::{
-    model::{self, Material},
-    texture,
-};
+use super::{model, texture};
 use cfg_if::cfg_if;
 use image::Rgba;
 use std::io::{BufReader, Cursor};
@@ -173,7 +170,7 @@ pub async fn generate_sphere_model(
     let (vertices, indices) = generate_sphere(radius, sectors, stacks);
 
     let default_color = Rgba([255, 255, 255, 255]);
-    let default_texture = texture::Texture::pure_color_texture(
+    let default_texture = texture::Texture::create_color_texture(
         device,
         queue,
         Some("default_sphere_texture"),

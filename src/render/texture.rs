@@ -64,7 +64,7 @@ impl Texture {
         Self::from_image(device, queue, &img, Some(label))
     }
 
-    pub fn pure_color_texture(
+    pub fn create_color_texture(
         device: &wgpu::Device,
         queue: &wgpu::Queue,
         label: Option<&str>,

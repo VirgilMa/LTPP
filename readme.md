@@ -18,7 +18,8 @@ Open index.html.
 - [X] camera simple movement
 - [X] fixed 60 frames per second
 - [X] a simple render engine
-- [X] simple GUI
+- [X] simple GUI, show some immediate infos
+- [X] render a simple sphere
 - [ ] a simple physics engine
 - [ ] a super ball considering torque
 - [ ] water simulation (both physics and rendering)

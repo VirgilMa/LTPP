@@ -67,6 +67,7 @@ impl Vertex {
     // }
 }
 
+// todo: change to transform.(add scale)
 #[derive(Debug)]
 pub struct Instance {
     pub position: cgmath::Vector3<f32>,
@@ -132,53 +133,4 @@ impl InstanceRaw {
             ],
         }
     }
-}
-
-pub struct Sphere {
-    pub radius: f32,
-    pub position: [f32; 3],
-}
-
-fn generate_sphere(radius: f32, sectors: u32, stacks: u32) -> (Vec<Vertex>, Vec<u16>) {
-    let mut vertices = Vec::new();
-    let mut indices = Vec::new();
-
-    for i in 0..=stacks {
-        let phi = std::f32::consts::PI * i as f32 / stacks as f32; // 纬度
-        for j in 0..=sectors {
-            let theta = 2.0 * std::f32::consts::PI * j as f32 / sectors as f32; // 经度
-
-            // 计算顶点位置
-            let x = radius * phi.sin() * theta.cos();
-            let y = radius * phi.cos();
-            let z = radius * phi.sin() * theta.sin();
-
-            // 计算纹理坐标
-            let u = j as f32 / sectors as f32; // u 坐标
-            let v = i as f32 / stacks as f32; // v 坐标
-
-            vertices.push(Vertex {
-                position: [x, y, z],
-                tex_coords: [u, v],
-            });
-        }
-    }
-
-    // 生成索引
-    for i in 0..stacks {
-        for j in 0..sectors {
-            let first = (i * (sectors + 1) + j) as u16;
-            let second = first + sectors as u16 + 1;
-
-            indices.push(first);
-            indices.push(second);
-            indices.push(first + 1);
-
-            indices.push(second);
-            indices.push(second + 1);
-            indices.push(first + 1);
-        }
-    }
-
-    (vertices, indices)
 }

@@ -2,6 +2,7 @@ use std::sync::Arc;
 
 use crate::render::model::ModelVertex;
 use cgmath::{InnerSpace, Rotation3, Vector3, Zero};
+use wgpu::core::instance;
 use wgpu::util::DeviceExt;
 use wgpu::TextureView;
 use winit::event::WindowEvent;
@@ -37,6 +38,7 @@ pub struct State<'a> {
 
     sphere_model: super::model::Model,
     sphere_instances: Vec<Instance>,
+    sphere_instance_buffer: wgpu::Buffer,
 }
 
 impl State<'_> {
@@ -274,22 +276,34 @@ impl State<'_> {
             0,
             Instance {
                 position: Vector3 {
-                    x: 1.0f32,
-                    y: 1.0f32,
-                    z: 1.0f32,
+                    x: 5.0f32,
+                    y: 5.0f32,
+                    z: 5.0f32,
                 },
                 rotation: cgmath::Quaternion::zero(),
             },
         );
+
+        let sphere_instance_data = sphere_instances
+            .iter()
+            .map(Instance::to_raw)
+            .collect::<Vec<_>>();
+        let sphere_instance_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            label: Some("Instance Buffer"),
+            contents: bytemuck::cast_slice(&sphere_instance_data),
+            usage: wgpu::BufferUsages::VERTEX,
+        });
+
         let sphere_model = resource::generate_sphere_model(
             &device,
             &queue,
             &texture_bind_group_layout,
-            10.0,
-            10,
-            10,
+            5.0,
+            32,
+            32,
         )
-        .await.unwrap();
+        .await
+        .unwrap();
 
         Self {
             window: window.clone(),
@@ -311,6 +325,7 @@ impl State<'_> {
             obj_model,
             sphere_model,
             sphere_instances,
+            sphere_instance_buffer,
         }
     }
 
@@ -337,6 +352,8 @@ impl State<'_> {
     pub fn update(&mut self) {
         self.camera_controller.update_camera(&mut self.camera);
         self.camera_uniform.update_view_proj(&self.camera);
+
+        // 模型的移动更新都可以通过类似的write_buffer来实现
         self.queue.write_buffer(
             &self.camera_buffer,
             0,
@@ -385,9 +402,18 @@ impl State<'_> {
                 material,
                 0..self.obj_instances.len() as u32,
                 &self.camera_bind_group,
-            )
+            );
 
             // draw spheres
+            render_pass.set_vertex_buffer(1, self.sphere_instance_buffer.slice(..));
+            let sphere_mesh = &self.sphere_model.meshes[0];
+            let sphere_material = &self.sphere_model.materials[sphere_mesh.material];
+            render_pass.draw_mesh_instanced(
+                sphere_mesh,
+                sphere_material,
+                0..self.sphere_instances.len() as u32,
+                &self.camera_bind_group,
+            );
         }
 
         self.queue.submit(std::iter::once(encoder.finish()));
