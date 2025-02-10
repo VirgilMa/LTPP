@@ -261,7 +261,7 @@ fn generate_sphere(radius: f32, sectors: u32, stacks: u32) -> (Vec<model::ModelV
     // 生成索引
     for i in 0..stacks {
         for j in 0..sectors {
-            let first = (i * (sectors + 1) + j) as u32;
+            let first = i * (sectors + 1) + j;
             let second = first + sectors + 1;
 
             indices.push(first);

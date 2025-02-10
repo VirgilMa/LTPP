@@ -2,7 +2,6 @@ use std::sync::Arc;
 
 use crate::render::model::ModelVertex;
 use cgmath::{InnerSpace, Rotation3, Vector3, Zero};
-use wgpu::core::instance;
 use wgpu::util::DeviceExt;
 use wgpu::TextureView;
 use winit::event::WindowEvent;

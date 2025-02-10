@@ -1,8 +1,8 @@
 use anyhow::*;
-use image::{DynamicImage, GenericImage, GenericImageView, ImageBuffer, Rgba};
+use image::{DynamicImage, GenericImageView, ImageBuffer, Rgba};
 
 pub struct Texture {
-    pub texture: wgpu::Texture,
+    pub _texture: wgpu::Texture,
     pub view: wgpu::TextureView,
     pub sampler: wgpu::Sampler,
 }
@@ -48,7 +48,7 @@ impl Texture {
         });
 
         Self {
-            texture,
+            _texture: texture,
             view,
             sampler,
         }
@@ -133,7 +133,7 @@ impl Texture {
         });
 
         Ok(Self {
-            texture,
+            _texture: texture,
             view,
             sampler,
         })

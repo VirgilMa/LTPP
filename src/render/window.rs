@@ -39,7 +39,6 @@ struct ImguiState {
     context: imgui::Context,
     platform: WinitPlatform,
     renderer: Renderer,
-    demo_open: bool,
 }
 
 struct App<'a> {
@@ -99,13 +98,11 @@ impl<'a> App<'a> {
             &self.state.queue,
             renderer_config,
         );
-        let demo_open = true;
 
         self.imgui = Some(ImguiState {
             context,
             platform,
             renderer,
-            demo_open,
         })
     }
 
@@ -262,7 +259,7 @@ pub async fn render() {
     let event_loop = EventLoop::new().unwrap();
 
     let window_attributes = winit::window::WindowAttributes::default()
-        .with_title("code adventure")
+        .with_title("LTPP")
         .with_inner_size(winit::dpi::LogicalSize::new(800, 600));
 
     // todo: move "create window procedure" to resume
