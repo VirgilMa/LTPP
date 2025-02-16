@@ -44,7 +44,10 @@ impl State<'_> {
     pub async fn new(window: Arc<Window>) -> Self {
         let size = window.inner_size();
 
-        let instance = wgpu::Instance::default();
+        let instance = wgpu::Instance::new(wgpu::InstanceDescriptor {
+            backends: wgpu::Backends::VULKAN, // 仅启用 Vulkan
+            ..Default::default()
+        });
         let surface = instance.create_surface(window.clone()).unwrap();
 
         let adapter = instance
