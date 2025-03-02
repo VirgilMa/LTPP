@@ -2,6 +2,8 @@
 edition = "2021"
 name = "ltpp"
 version = "0.1.0"
+default-run = "ltpp_run"
+authors = ["virgilma"]
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 

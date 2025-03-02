@@ -125,7 +125,7 @@ impl State<'_> {
         });
 
         let camera = Camera {
-            eye: (0.0, 1.0, 2.0).into(),
+            eye: (0.0, 0.0, 15.0).into(),
             target: (0.0, 0.0, 0.0).into(),
             up: cgmath::Vector3::unit_y(),
             aspect: config.width as f32 / config.height as f32,
@@ -248,12 +248,12 @@ impl State<'_> {
             .collect::<Vec<_>>();
 
         // rotate vector to show the value of depth buffer
-        // println!("instance vec orig: {:?}", instances);
+        // println!("instance vec orig: {:?}", obj_instances);
         let instances_len = obj_instances.len();
         for i in 0..(instances_len / 2) {
             obj_instances.swap(i, instances_len - 1 - i);
         }
-        // println!("instance vec after: {:?}", instances);
+        // println!("instance vec after: {:?}", obj_instances);
 
         let instance_data = obj_instances
             .iter()
@@ -278,9 +278,9 @@ impl State<'_> {
             0,
             Instance {
                 position: Vector3 {
-                    x: 5.0f32,
+                    x: 0.0f32,
                     y: 5.0f32,
-                    z: 5.0f32,
+                    z: 0.0f32,
                 },
                 rotation: cgmath::Quaternion::zero(),
             },
@@ -300,7 +300,7 @@ impl State<'_> {
             &device,
             &queue,
             &texture_bind_group_layout,
-            5.0,
+            0.2,
             32,
             32,
         )
@@ -351,6 +351,10 @@ impl State<'_> {
         self.camera_controller.process_events(event)
     }
 
+    pub fn phy_update(&mut self) {
+
+    }
+
     pub fn update(&mut self) {
         self.camera_controller.update_camera(&mut self.camera);
         self.camera_uniform.update_view_proj(&self.camera);
@@ -394,17 +398,17 @@ impl State<'_> {
             });
 
             render_pass.set_pipeline(&self.render_pipeline);
-            render_pass.set_vertex_buffer(1, self.instance_buffer.slice(..));
+            // render_pass.set_vertex_buffer(1, self.instance_buffer.slice(..));
 
             use super::model::DrawModel;
-            let mesh = &self.obj_model.meshes[0];
-            let material = &self.obj_model.materials[mesh.material];
-            render_pass.draw_mesh_instanced(
-                mesh,
-                material,
-                0..self.obj_instances.len() as u32,
-                &self.camera_bind_group,
-            );
+            // let mesh = &self.obj_model.meshes[0];
+            // let material = &self.obj_model.materials[mesh.material];
+            // render_pass.draw_mesh_instanced(
+            //     mesh,
+            //     material,
+            //     0..self.obj_instances.len() as u32,
+            //     &self.camera_bind_group,
+            // );
 
             // draw spheres
             render_pass.set_vertex_buffer(1, self.sphere_instance_buffer.slice(..));

@@ -13,6 +13,13 @@ wasm-pack build --release --target web
 
 Open index.html.
 
+### issues
+
+### physics engine roadmap
+
+1. Draw a ball drop down by the gravity, collide with the floor and bounce up.
+2. With the air friction, it will finally turn into a still state.
+
 ## TODO
 
 - [X] camera simple movement
