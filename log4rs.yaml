@@ -1,0 +1,20 @@
+# log4rs.yaml
+appenders:
+  file:
+    kind: rolling_file
+    path: "logs/app.log"
+    append: true
+    policy:
+      trigger:
+        kind: size
+        limit: 10mb # 当日志文件达到 10MB 时触发轮转
+      roller:
+        kind: fixed_window # 使用固定窗口策略
+        pattern: "logs/app.log.{}"
+        count: 5 # 保留最近 5 个日志文件
+        base: 1
+
+root:
+  level: debug
+  appenders:
+    - file
