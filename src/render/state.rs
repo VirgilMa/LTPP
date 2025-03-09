@@ -1,5 +1,6 @@
 use std::sync::Arc;
 
+use crate::get_current_time;
 use crate::render::model::ModelVertex;
 use cgmath::{InnerSpace, Rotation3, Vector3, Zero};
 use wgpu::util::DeviceExt;
@@ -38,16 +39,15 @@ pub struct State<'a> {
     sphere_model: super::model::Model,
     sphere_instances: Vec<Instance>,
     sphere_instance_buffer: wgpu::Buffer,
+
+    last_update_time: i64,
 }
 
 impl State<'_> {
     pub async fn new(window: Arc<Window>) -> Self {
         let size = window.inner_size();
 
-        let instance = wgpu::Instance::new(wgpu::InstanceDescriptor {
-            backends: wgpu::Backends::VULKAN, // 仅启用 Vulkan
-            ..Default::default()
-        });
+        let instance = wgpu::Instance::default();
         let surface = instance.create_surface(window.clone()).unwrap();
 
         let adapter = instance
@@ -293,7 +293,7 @@ impl State<'_> {
         let sphere_instance_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
             label: Some("Instance Buffer"),
             contents: bytemuck::cast_slice(&sphere_instance_data),
-            usage: wgpu::BufferUsages::VERTEX,
+            usage: wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST,
         });
 
         let sphere_model = resource::generate_sphere_model(
@@ -306,6 +306,8 @@ impl State<'_> {
         )
         .await
         .unwrap();
+
+        let last_update_time = get_current_time();
 
         Self {
             window: window.clone(),
@@ -328,6 +330,7 @@ impl State<'_> {
             sphere_model,
             sphere_instances,
             sphere_instance_buffer,
+            last_update_time,
         }
     }
 
@@ -351,13 +354,39 @@ impl State<'_> {
         self.camera_controller.process_events(event)
     }
 
-    pub fn phy_update(&mut self) {
+    pub fn phy_update(&mut self, delta_time: i64) {
+        for instance in &mut self.sphere_instances {
+            instance.position.y -= 1.0 * (delta_time as f32) / 1000.0;
+            // println!(
+            //     "update sphere instance's position: {:?}, delta_time: {}",
+            //     instance.position, delta_time
+            // )
+        }
 
+        self.phy_update_write_instance_buffer();
+    }
+
+    fn phy_update_write_instance_buffer(&mut self) {
+        let sphere_instance_data = self
+            .sphere_instances
+            .iter()
+            .map(Instance::to_raw)
+            .collect::<Vec<_>>();
+
+        self.queue.write_buffer(
+            &self.sphere_instance_buffer,
+            0,
+            bytemuck::cast_slice(&sphere_instance_data),
+        );
     }
 
     pub fn update(&mut self) {
+        let now = get_current_time();
+        let last_time = self.last_update_time;
+        let delta_time = now - last_time;
         self.camera_controller.update_camera(&mut self.camera);
         self.camera_uniform.update_view_proj(&self.camera);
+        self.phy_update(delta_time);
 
         // 模型的移动更新都可以通过类似的write_buffer来实现
         self.queue.write_buffer(
@@ -365,6 +394,8 @@ impl State<'_> {
             0,
             bytemuck::cast_slice(&[self.camera_uniform]),
         );
+
+        self.last_update_time = now
     }
 
     pub fn scene_render(&mut self, view: &TextureView) -> Result<(), wgpu::SurfaceError> {
