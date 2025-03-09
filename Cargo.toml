@@ -13,9 +13,6 @@ crate-type = ["cdylib", "rlib"]
 [[bin]]
 name = "ltpp_run"
 
-[[bin]]
-name = "phy_run"
-
 [dependencies]
 anyhow = "1.0.75"
 bytemuck = {version = "1.12", features = ["derive"]}
@@ -47,7 +44,7 @@ web-sys = { version = "0.3", features = [
     "Element",
     "Location",
 ]}
-reqwest = "0.12"
+reqwest = "0.12.12"
 
 [build-dependencies]
 anyhow = "1.0"

@@ -7,7 +7,6 @@ cfg_if::cfg_if! {
     }
 }
 
-pub mod objmgr;
 mod physics;
 mod render;
 
