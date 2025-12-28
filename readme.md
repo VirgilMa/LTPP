@@ -29,6 +29,12 @@ Open index.html.
 - [X] simple GUI, show some immediate infos
 - [X] render a simple sphere
 - [ ] a simple physics engine
-- [ ] a super ball considering torque
 - [ ] water simulation (both physics and rendering)
+  - [ ] rigid body simulation
+    - [ ] a super ball considering torque
+  - [ ] implict eular
+  - [ ] RK4
+  - [ ] position-based / verlet integration
 - [ ] support skeleton and skeleton animation
+- [ ] add grids rendering
+- [ ] try some new techs
