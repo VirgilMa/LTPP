@@ -15,6 +15,8 @@ use super::{lib::*, resource, texture};
 
 use super::model::Vertex;
 
+const SPACE_BETWEEN: f32 = 3.0;
+
 pub struct State<'a> {
     pub surface: wgpu::Surface<'a>,
     pub device: wgpu::Device,
@@ -228,7 +230,6 @@ impl State<'_> {
         let camera_controller = CameraController::new(0.2, 1.0, &size);
 
         // instances
-        const SPACE_BETWEEN: f32 = 3.0;
         let mut obj_instances = (0..NUM_INSTANCE_PER_ROW)
             .flat_map(|z| {
                 (0..NUM_INSTANCE_PER_ROW).map(move |x| {
@@ -247,7 +248,7 @@ impl State<'_> {
                     Instance {
                         position,
                         rotation,
-                        last_position: Vector3::zero(),
+                        last_position: position,
                     }
                 })
             })
@@ -419,6 +420,18 @@ impl State<'_> {
         );
 
         self.last_update_time = now
+    }
+
+    pub fn reset_physics(&mut self) {
+        for (i, instance) in self.sphere_instances.iter_mut().enumerate() {
+            instance.position = Vector3 {
+                x: i as f32,
+                y: 5.0f32,
+                z: 0.0f32,
+            };
+            instance.last_position = instance.position;
+            instance.rotation = cgmath::Quaternion::zero();
+        }
     }
 
     pub fn scene_render(&mut self, view: &TextureView) -> Result<(), wgpu::SurfaceError> {

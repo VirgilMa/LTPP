@@ -2,6 +2,7 @@ use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use super::state::State;
+use cgmath;
 use imgui::FontSource;
 use imgui_wgpu::{Renderer, RendererConfig};
 use imgui_winit_support::WinitPlatform;
@@ -142,15 +143,24 @@ impl<'a> App<'a> {
         {
             // ui.show_demo_window(&mut imgui.demo_open);
 
-            let camera_pos = &self.state.camera.eye;
-            let camera_target = &self.state.camera.target;
-
             // 创建一个 ImGui 窗口并显示相机位置
             let window_pos = [0.0, 0.0];
             ui.window("Info")
-                .size([300.0, 100.0], imgui::Condition::FirstUseEver)
+                .size([300.0, 140.0], imgui::Condition::FirstUseEver)
                 .position(window_pos, imgui::Condition::FirstUseEver)
                 .build(|| {
+                    if ui.button("Reset Camera") {
+                        // Reset camera to initial position and target
+                        self.state.camera.eye = cgmath::Point3::new(0.0, 0.0, 15.0);
+                        self.state.camera.target = cgmath::Point3::new(0.0, 0.0, 0.0);
+                    }
+                    ui.same_line();
+                    if ui.button("Reset Physics") {
+                        // Reset physics simulation
+                        self.state.reset_physics();
+                    }
+                    let camera_pos = &self.state.camera.eye;
+                    let camera_target = &self.state.camera.target;
                     ui.text(format!(
                         "Camera Position: ({:.2}, {:.2}, {:.2})",
                         camera_pos.x, camera_pos.y, camera_pos.z

@@ -96,7 +96,7 @@ impl PhyMgr {
                     // collision
                 }
             }
-            for j in 0..static_objs_len {}
+            for _j in 0..static_objs_len {}
         }
 
         // update all dynamics
