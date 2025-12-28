@@ -1,3 +1,5 @@
+use cgmath::InnerSpace;
+
 type Vector3 = cgmath::Vector3<f32>;
 type Vector4 = cgmath::Vector4<f32>;
 type Quaternion = cgmath::Quaternion<f32>;
@@ -76,14 +78,25 @@ impl PhyMgr {
 
         // check collision, cal the collision normal, squeeze out and reverse velocity by the collision
         for i in 0..dynamic_objs_len {
-            for j in 0..dynamic_objs_len{
-
-                
+            for j in (i + 1)..dynamic_objs_len {
+                let obj1 = &self.dynamic_objs[i];
+                let obj2 = &self.dynamic_objs[j];
+                let pos1 = &obj1.transform.disp;
+                let pos2 = &obj2.transform.disp;
+                let collision_normal = pos2 - pos1;
+                let dist2 = collision_normal.magnitude2();
+                let r1 = match obj1.shape {
+                    Shape::Sphere { radius } => radius,
+                };
+                let r2 = match obj2.shape {
+                    Shape::Sphere { radius } => radius,
+                };
+                let rab2 = (r1 + r2) * (r1 + r2);
+                if dist2 < rab2 {
+                    // collision
+                }
             }
-            for j in 0..static_objs_len {
-
-                
-            }
+            for j in 0..static_objs_len {}
         }
 
         // update all dynamics
