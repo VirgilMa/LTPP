@@ -38,7 +38,7 @@ impl FpsCounter {
 struct ImguiState {
     context: imgui::Context,
     platform: WinitPlatform,
-    renderer: Renderer,
+    renderer: imgui_wgpu::Renderer,
 }
 
 struct App<'a> {
@@ -92,7 +92,7 @@ impl<'a> App<'a> {
             ..Default::default()
         };
 
-        let renderer = Renderer::new(
+        let renderer = imgui_wgpu::Renderer::new(
             &mut context,
             &self.state.device,
             &self.state.queue,

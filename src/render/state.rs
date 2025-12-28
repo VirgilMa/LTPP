@@ -1,3 +1,5 @@
+// main cycle is here
+
 use std::sync::Arc;
 
 use crate::get_current_time;
@@ -242,7 +244,11 @@ impl State<'_> {
                         cgmath::Quaternion::from_axis_angle(position.normalize(), cgmath::Deg(45.0))
                     };
 
-                    Instance { position, rotation }
+                    Instance {
+                        position,
+                        rotation,
+                        last_position: Vector3::zero(),
+                    }
                 })
             })
             .collect::<Vec<_>>();
@@ -274,17 +280,24 @@ impl State<'_> {
                 .unwrap();
 
         let mut sphere_instances: Vec<Instance> = vec![];
-        sphere_instances.insert(
-            0,
-            Instance {
-                position: Vector3 {
-                    x: 0.0f32,
-                    y: 5.0f32,
-                    z: 0.0f32,
+        for i in 0..10 {
+            sphere_instances.insert(
+                0,
+                Instance {
+                    position: Vector3 {
+                        x: i as f32,
+                        y: 5.0f32,
+                        z: 0.0f32,
+                    },
+                    last_position: Vector3 {
+                        x: i as f32,
+                        y: 5.0f32,
+                        z: 0.0f32,
+                    },
+                    rotation: cgmath::Quaternion::zero(),
                 },
-                rotation: cgmath::Quaternion::zero(),
-            },
-        );
+            );
+        }
 
         let sphere_instance_data = sphere_instances
             .iter()
@@ -355,8 +368,18 @@ impl State<'_> {
     }
 
     pub fn phy_update(&mut self, delta_time: i64) {
+        let delta_time_s = (delta_time as f32) / 1000.0;
+        let dt2_div2 = delta_time_s * delta_time_s / 2.0;
+        let acc = Vector3 {
+            x: 0.0,
+            y: -9.8,
+            z: 0.0,
+        };
         for instance in &mut self.sphere_instances {
-            instance.position.y -= 1.0 * (delta_time as f32) / 1000.0;
+            let llast_position = instance.last_position;
+            let last_position = instance.position;
+            instance.last_position = last_position;
+            instance.position = last_position + last_position - llast_position + acc * dt2_div2;
             // println!(
             //     "update sphere instance's position: {:?}, delta_time: {}",
             //     instance.position, delta_time
