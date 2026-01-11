@@ -17,6 +17,48 @@ use super::model::Vertex;
 
 const SPACE_BETWEEN: f32 = 3.0;
 
+// 定义模型实例结构
+pub struct ModelInstance {
+    pub model: super::model::Model,
+    pub instances: Vec<Instance>,
+    pub instance_buffer: wgpu::Buffer,
+}
+
+impl ModelInstance {
+    pub fn new(
+        model: super::model::Model,
+        instances: Vec<Instance>,
+        device: &wgpu::Device,
+    ) -> Self {
+        let instance_data = instances.iter().map(Instance::to_raw).collect::<Vec<_>>();
+        let instance_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            label: Some("Instance Buffer"),
+            contents: bytemuck::cast_slice(&instance_data),
+            usage: wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST,
+        });
+
+        Self {
+            model,
+            instances,
+            instance_buffer,
+        }
+    }
+
+    pub fn update_instance_buffer(&mut self, queue: &wgpu::Queue) {
+        let instance_data = self
+            .instances
+            .iter()
+            .map(Instance::to_raw)
+            .collect::<Vec<_>>();
+
+        queue.write_buffer(
+            &self.instance_buffer,
+            0,
+            bytemuck::cast_slice(&instance_data),
+        );
+    }
+}
+
 pub struct State<'a> {
     pub surface: wgpu::Surface<'a>,
     pub device: wgpu::Device,
@@ -46,11 +88,13 @@ pub struct State<'a> {
     depth_texture: super::texture::Texture,
     obj_model: super::model::Model,
 
-    sphere_model: super::model::Model,
-    sphere_instances: Vec<Instance>,
-    sphere_instance_buffer: wgpu::Buffer,
+    // 存储所有模型实例的集合
+    model_instances: Vec<ModelInstance>,
 
     last_update_time: i64,
+
+    pub phy_tick_trigger: bool,
+    pub phy_single_step: bool,
 }
 
 impl State<'_> {
@@ -273,7 +317,7 @@ impl State<'_> {
             label: Some("Edge Shader"),
             source: wgpu::ShaderSource::Wgsl(include_str!("shaders/edge_shader.wgsl").into()),
         });
-        
+
         let edge_pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
             label: Some("Edge Pipeline Layout"),
             bind_group_layouts: &[&texture_bind_group_layout, &camera_bind_group_layout],
@@ -382,9 +426,10 @@ impl State<'_> {
                 .await
                 .unwrap();
 
-        let mut sphere_instances: Vec<Instance> = vec![];
+        // 创建圆柱体实例
+        let mut cylinder_instances: Vec<Instance> = vec![];
         for i in 0..10 {
-            sphere_instances.insert(
+            cylinder_instances.insert(
                 0,
                 Instance {
                     position: Vector3 {
@@ -402,27 +447,39 @@ impl State<'_> {
             );
         }
 
-        let sphere_instance_data = sphere_instances
-            .iter()
-            .map(Instance::to_raw)
-            .collect::<Vec<_>>();
-        let sphere_instance_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-            label: Some("Instance Buffer"),
-            contents: bytemuck::cast_slice(&sphere_instance_data),
-            usage: wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST,
-        });
-
-        let sphere_model = resource::generate_sphere_model(
+        // 创建圆柱体模型（用于填充渲染）
+        let cylinder_model = resource::generate_cylinder_model(
             &device,
             &queue,
             &texture_bind_group_layout,
-            0.2,
+            0.5,
+            1.0,
             32,
             32,
             None, // Use default color
         )
-        .await
         .unwrap();
+
+        // 创建圆柱体边缘模型（用于边缘渲染）
+        let _cylinder_edge_model = resource::generate_cylinder_edge_model(
+            &device,
+            &queue,
+            &texture_bind_group_layout,
+            0.5,
+            1.0,
+            32,
+            32,
+            None, // Use default color
+        )
+        .unwrap();
+
+        // 创建模型实例集合
+        let mut model_instances = Vec::new();
+
+        // 添加圆柱体模型实例（使用边缘模型作为第二个模型）
+        let cylinder_model_instance =
+            ModelInstance::new(cylinder_model, cylinder_instances, &device);
+        model_instances.push(cylinder_model_instance);
 
         let last_update_time = get_current_time();
 
@@ -441,16 +498,14 @@ impl State<'_> {
             camera_buffer,
             camera_bind_group,
             camera_controller,
-            // outline_params_buffer,
-            // outline_bind_group,
             obj_instances,
             instance_buffer,
             depth_texture,
             obj_model,
-            sphere_model,
-            sphere_instances,
-            sphere_instance_buffer,
+            model_instances,
             last_update_time,
+            phy_tick_trigger: false,
+            phy_single_step: false,
         }
     }
 
@@ -482,32 +537,29 @@ impl State<'_> {
             y: -9.8,
             z: 0.0,
         };
-        for instance in &mut self.sphere_instances {
-            let llast_position = instance.last_position;
-            let last_position = instance.position;
-            instance.last_position = last_position;
-            instance.position = last_position + last_position - llast_position + acc * dt2_div2;
-            // println!(
-            //     "update sphere instance's position: {:?}, delta_time: {}",
-            //     instance.position, delta_time
-            // )
+
+        // 更新所有模型实例的物理状态
+        for model_instance in &mut self.model_instances {
+            for instance in &mut model_instance.instances {
+                let llast_position = instance.last_position;
+                let last_position = instance.position;
+                instance.last_position = last_position;
+                instance.position = last_position + last_position - llast_position + acc * dt2_div2;
+                // println!(
+                //     "update sphere instance's position: {:?}, delta_time: {}",
+                //     instance.position, delta_time
+                // )
+            }
         }
 
         self.phy_update_write_instance_buffer();
     }
 
     fn phy_update_write_instance_buffer(&mut self) {
-        let sphere_instance_data = self
-            .sphere_instances
-            .iter()
-            .map(Instance::to_raw)
-            .collect::<Vec<_>>();
-
-        self.queue.write_buffer(
-            &self.sphere_instance_buffer,
-            0,
-            bytemuck::cast_slice(&sphere_instance_data),
-        );
+        // 更新所有模型实例的缓冲区
+        for model_instance in &mut self.model_instances {
+            model_instance.update_instance_buffer(&self.queue);
+        }
     }
 
     pub fn update(&mut self) {
@@ -516,7 +568,15 @@ impl State<'_> {
         let delta_time = now - last_time;
         self.camera_controller.update_camera(&mut self.camera);
         self.camera_uniform.update_view_proj(&self.camera);
-        self.phy_update(delta_time);
+
+        // 物理更新逻辑：持续运行、单步执行或不执行
+        if self.phy_tick_trigger || self.phy_single_step {
+            self.phy_update(delta_time);
+            // 如果是单步执行，则执行后重置标志
+            if self.phy_single_step {
+                self.phy_single_step = false;
+            }
+        }
 
         // 模型的移动更新都可以通过类似的write_buffer来实现
         self.queue.write_buffer(
@@ -529,15 +589,21 @@ impl State<'_> {
     }
 
     pub fn reset_physics(&mut self) {
-        for (i, instance) in self.sphere_instances.iter_mut().enumerate() {
-            instance.position = Vector3 {
-                x: i as f32,
-                y: 5.0f32,
-                z: 0.0f32,
-            };
-            instance.last_position = instance.position;
-            instance.rotation = cgmath::Quaternion::zero();
+        // 重置所有模型实例
+        for model_instance in &mut self.model_instances {
+            for (i, instance) in model_instance.instances.iter_mut().enumerate() {
+                instance.position = Vector3 {
+                    x: i as f32,
+                    y: 5.0f32,
+                    z: 0.0f32,
+                };
+                instance.last_position = instance.position;
+                instance.rotation = cgmath::Quaternion::zero();
+            }
         }
+
+        // 更新 GPU 实例缓冲区以反映重置的位置
+        self.phy_update_write_instance_buffer();
     }
 
     pub fn scene_render(&mut self, view: &TextureView) -> Result<(), wgpu::SurfaceError> {
@@ -583,42 +649,39 @@ impl State<'_> {
             //     &self.camera_bind_group,
             // );
 
-            // draw spheres
-            render_pass.set_vertex_buffer(1, self.sphere_instance_buffer.slice(..));
-            let sphere_mesh = &self.sphere_model.meshes[0];
-            let sphere_material = &self.sphere_model.materials[sphere_mesh.material];
+            // 渲染所有模型实例
+            for model_instance in &self.model_instances {
+                // 渲染填充模型（第一个网格）
+                render_pass.set_pipeline(&self.mesh_pipeline);
+                render_pass.set_vertex_buffer(1, model_instance.instance_buffer.slice(..));
 
-            // Define outline parameters
-            // let outline_params = super::model::OutlineParams {
-            //     outline_color: [0.0, 0.0, 0.0, 1.0], // Black outline
-            //     outline_width: 0.02, // Outline width
-            //     enable_outline: 1.0, // Enable outline
-            // };
+                if !model_instance.model.meshes.is_empty() {
+                    let fill_mesh = &model_instance.model.meshes[0];
+                    let material = &model_instance.model.materials[fill_mesh.material];
 
-            // // Update outline params buffer
-            // self.queue.write_buffer(
-            //     &self.outline_params_buffer,
-            //     0,
-            //     bytemuck::cast_slice(&[outline_params]),
-            // );
+                    render_pass.draw_mesh_instanced(
+                        fill_mesh,
+                        material,
+                        0..model_instance.instances.len() as u32,
+                        &self.camera_bind_group,
+                    );
+                }
 
-            render_pass.draw_mesh_instanced(
-                sphere_mesh,
-                sphere_material,
-                0..self.sphere_instances.len() as u32,
-                &self.camera_bind_group,
-                // &self.outline_bind_group,
-            );
+                // 渲染边缘（第二个网格）
+                if model_instance.model.meshes.len() > 1 {
+                    render_pass.set_pipeline(&self.edge_pipeline);
+                    render_pass.set_vertex_buffer(1, model_instance.instance_buffer.slice(..));
 
-
-            render_pass.set_pipeline(&self.edge_pipeline);
-            render_pass.draw_mesh_instanced(
-                sphere_mesh,
-                sphere_material,
-                0..self.sphere_instances.len() as u32,
-                &self.camera_bind_group,
-                // &self.outline_bind_group,
-            );
+                    let edge_mesh = &model_instance.model.meshes[1];
+                    let edge_material = &model_instance.model.materials[edge_mesh.material];
+                    render_pass.draw_mesh_instanced(
+                        edge_mesh,
+                        edge_material,
+                        0..model_instance.instances.len() as u32,
+                        &self.camera_bind_group,
+                    );
+                }
+            }
         }
 
         self.queue.submit(std::iter::once(encoder.finish()));
