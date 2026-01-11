@@ -45,6 +45,6 @@ Open index.html.
 - [ ] a timewheel to put all things together (simplest way)
 - [ ] a physical-driven vehicle, including 4 wheels and 2 wheels
 
-### small
+### physics
 
-- [ ] 2d 3 big static balls and several dynamic balls, bouncing to stable
+- [ ] a static plane and a dynamic cylinder. the cylinder drop down and bounce up, ending up with a still state.

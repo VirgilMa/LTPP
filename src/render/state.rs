@@ -26,7 +26,9 @@ pub struct State<'a> {
     window: Arc<Window>,
     clear_color: wgpu::Color,
 
-    render_pipeline: wgpu::RenderPipeline,
+    mesh_pipeline: wgpu::RenderPipeline,
+
+    edge_pipeline: wgpu::RenderPipeline,
 
     pub camera: Camera,
     camera_uniform: CameraUniform,
@@ -34,6 +36,10 @@ pub struct State<'a> {
     camera_bind_group: wgpu::BindGroup,
     camera_controller: CameraController,
 
+    // Outline related
+    // outline_bind_group_layout: wgpu::BindGroupLayout,
+    // outline_params_buffer: wgpu::Buffer,
+    // outline_bind_group: wgpu::BindGroup,
     obj_instances: Vec<Instance>,
     instance_buffer: wgpu::Buffer,
 
@@ -116,6 +122,43 @@ impl State<'_> {
                 label: Some("texture_bind_group_layout"),
             });
 
+        // let outline_bind_group_layout =
+        //     device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+        //         entries: &[wgpu::BindGroupLayoutEntry {
+        //             binding: 0,
+        //             visibility: wgpu::ShaderStages::FRAGMENT,
+        //             ty: wgpu::BindingType::Buffer {
+        //                 ty: wgpu::BufferBindingType::Uniform,
+        //                 has_dynamic_offset: false,
+        //                 min_binding_size: None,
+        //             },
+        //             count: None,
+        //         }],
+        //         label: Some("outline_bind_group_layout"),
+        //     });
+
+        // // Create outline parameters buffer and bind group
+        // let outline_params = super::model::OutlineParams {
+        //     outline_color: [0.0, 0.0, 0.0, 1.0], // Black outline
+        //     outline_width: 0.02, // Outline width
+        //     enable_outline: 1.0, // Enable outline
+        // };
+
+        // let outline_params_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+        //     label: Some("Outline Params Buffer"),
+        //     contents: bytemuck::cast_slice(&[outline_params]),
+        //     usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
+        // });
+
+        // let outline_bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
+        //     layout: &outline_bind_group_layout,
+        //     entries: &[wgpu::BindGroupEntry {
+        //         binding: 0,
+        //         resource: wgpu::BindingResource::Buffer(outline_params_buffer.as_entire_buffer_binding()),
+        //     }],
+        //     label: Some("outline_bind_group"),
+        // });
+
         let clear_color = wgpu::Color {
             r: 0.1,
             g: 0.2,
@@ -125,7 +168,7 @@ impl State<'_> {
 
         let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
             label: Some("Shader"),
-            source: wgpu::ShaderSource::Wgsl(include_str!("shaders/shader.wgsl").into()),
+            source: wgpu::ShaderSource::Wgsl(include_str!("shaders/mesh_shader.wgsl").into()),
         });
 
         let camera = Camera {
@@ -171,16 +214,15 @@ impl State<'_> {
             label: Some("camera_bind_group"),
         });
 
-        let render_pipeline_layout =
-            device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
-                label: Some("Render Pipeline Layout"),
-                bind_group_layouts: &[&texture_bind_group_layout, &camera_bind_group_layout],
-                push_constant_ranges: &[],
-            });
+        let mesh_pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+            label: Some("Render Pipeline Layout"),
+            bind_group_layouts: &[&texture_bind_group_layout, &camera_bind_group_layout],
+            push_constant_ranges: &[],
+        });
 
-        let render_pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
-            label: Some("Render Pipeline"),
-            layout: Some(&render_pipeline_layout),
+        let mesh_pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
+            label: Some("Mesh Pipeline"),
+            layout: Some(&mesh_pipeline_layout),
             vertex: wgpu::VertexState {
                 module: &shader,
                 entry_point: Some("vs_main"), // 1.
@@ -225,6 +267,66 @@ impl State<'_> {
             },
             multiview: None, // 5.
             cache: None,
+        });
+
+        let edge_shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
+            label: Some("Edge Shader"),
+            source: wgpu::ShaderSource::Wgsl(include_str!("shaders/edge_shader.wgsl").into()),
+        });
+        
+        let edge_pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+            label: Some("Edge Pipeline Layout"),
+            bind_group_layouts: &[&texture_bind_group_layout, &camera_bind_group_layout],
+            push_constant_ranges: &[],
+        });
+
+        let edge_pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
+            label: Some("Edge Pipeline"),
+            layout: Some(&edge_pipeline_layout),
+            vertex: wgpu::VertexState {
+                module: &edge_shader,
+                entry_point: Some("vs_main"), // 1.
+                compilation_options: wgpu::PipelineCompilationOptions::default(),
+                buffers: &[ModelVertex::desc(), InstanceRaw::desc()], // 2.
+            },
+            fragment: Some(wgpu::FragmentState {
+                // 3.
+                module: &edge_shader,
+                entry_point: Some("fs_main"),
+                compilation_options: wgpu::PipelineCompilationOptions::default(),
+                targets: &[Some(wgpu::ColorTargetState {
+                    // 4.
+                    format: config.format,
+                    blend: Some(wgpu::BlendState::REPLACE),
+                    write_mask: wgpu::ColorWrites::ALL,
+                })],
+            }),
+            primitive: wgpu::PrimitiveState {
+                topology: wgpu::PrimitiveTopology::LineList, // 1.
+                strip_index_format: None,
+                front_face: wgpu::FrontFace::Ccw, // 2.
+                cull_mode: Some(wgpu::Face::Back),
+                // Setting this to anything other than Fill requires Features::NON_FILL_POLYGON_MODE
+                polygon_mode: wgpu::PolygonMode::Fill,
+                // Requires Features::DEPTH_CLIP_CONTROL
+                unclipped_depth: false,
+                // Requires Features::CONSERVATIVE_RASTERIZATION
+                conservative: false,
+            },
+            depth_stencil: Some(wgpu::DepthStencilState {
+                format: texture::Texture::DEPTH_FORMAT,
+                depth_write_enabled: true,
+                depth_compare: wgpu::CompareFunction::Less, // 1.
+                stencil: wgpu::StencilState::default(),     // 2.
+                bias: wgpu::DepthBiasState::default(),
+            }),
+            multiview: None, // 5.
+            cache: None,
+            multisample: wgpu::MultisampleState {
+                count: 1,                         // 2.
+                mask: !0,                         // 3.
+                alpha_to_coverage_enabled: false, // 4.
+            },
         });
 
         let camera_controller = CameraController::new(0.2, 1.0, &size);
@@ -317,6 +419,7 @@ impl State<'_> {
             0.2,
             32,
             32,
+            None, // Use default color
         )
         .await
         .unwrap();
@@ -331,12 +434,15 @@ impl State<'_> {
             config,
             size,
             clear_color,
-            render_pipeline,
+            mesh_pipeline,
+            edge_pipeline,
             camera,
             camera_uniform,
             camera_buffer,
             camera_bind_group,
             camera_controller,
+            // outline_params_buffer,
+            // outline_bind_group,
             obj_instances,
             instance_buffer,
             depth_texture,
@@ -464,7 +570,7 @@ impl State<'_> {
                 occlusion_query_set: None,
             });
 
-            render_pass.set_pipeline(&self.render_pipeline);
+            render_pass.set_pipeline(&self.mesh_pipeline);
             // render_pass.set_vertex_buffer(1, self.instance_buffer.slice(..));
 
             use super::model::DrawModel;
@@ -481,11 +587,37 @@ impl State<'_> {
             render_pass.set_vertex_buffer(1, self.sphere_instance_buffer.slice(..));
             let sphere_mesh = &self.sphere_model.meshes[0];
             let sphere_material = &self.sphere_model.materials[sphere_mesh.material];
+
+            // Define outline parameters
+            // let outline_params = super::model::OutlineParams {
+            //     outline_color: [0.0, 0.0, 0.0, 1.0], // Black outline
+            //     outline_width: 0.02, // Outline width
+            //     enable_outline: 1.0, // Enable outline
+            // };
+
+            // // Update outline params buffer
+            // self.queue.write_buffer(
+            //     &self.outline_params_buffer,
+            //     0,
+            //     bytemuck::cast_slice(&[outline_params]),
+            // );
+
             render_pass.draw_mesh_instanced(
                 sphere_mesh,
                 sphere_material,
                 0..self.sphere_instances.len() as u32,
                 &self.camera_bind_group,
+                // &self.outline_bind_group,
+            );
+
+
+            render_pass.set_pipeline(&self.edge_pipeline);
+            render_pass.draw_mesh_instanced(
+                sphere_mesh,
+                sphere_material,
+                0..self.sphere_instances.len() as u32,
+                &self.camera_bind_group,
+                // &self.outline_bind_group,
             );
         }
 

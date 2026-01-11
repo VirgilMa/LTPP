@@ -165,11 +165,17 @@ pub async fn generate_sphere_model(
     radius: f32,
     sectors: u32,
     stacks: u32,
+    color: Option<image::Rgba<u8>>,
 ) -> anyhow::Result<model::Model> {
     // 生成球体顶点和索引数据
     let (vertices, indices) = generate_sphere(radius, sectors, stacks);
 
-    let default_color = Rgba([255, 255, 255, 255]);
+    let default_color = if let Some(c) = color {
+        c
+    } else {
+        Rgba([255, 255, 255, 255]) // 默认白色
+    };
+
     let default_texture = texture::Texture::create_color_texture(
         device,
         queue,
@@ -275,4 +281,222 @@ fn generate_sphere(radius: f32, sectors: u32, stacks: u32) -> (Vec<model::ModelV
     }
 
     (vertices, indices)
+}
+
+// 生成圆柱体模型的函数
+pub async fn generate_cylinder_model(
+    device: &wgpu::Device,
+    queue: &wgpu::Queue,
+    layout: &wgpu::BindGroupLayout,
+    radius: f32,
+    height: f32,
+    sectors: u32,
+    stacks: u32,
+    color: Option<image::Rgba<u8>>,
+) -> anyhow::Result<model::Model> {
+    // 生成圆柱体顶点和索引数据
+    let (vertices, indices) = generate_cylinder(radius, height, sectors, stacks);
+
+    let default_color = if let Some(c) = color {
+        c
+    } else {
+        Rgba([255, 255, 255, 255]) // 默认白色
+    };
+
+    let default_texture = texture::Texture::create_color_texture(
+        device,
+        queue,
+        Some("default_cylinder_texture"),
+        800,
+        600,
+        default_color,
+    )?;
+
+    let bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
+        layout,
+        entries: &[
+            wgpu::BindGroupEntry {
+                binding: 0,
+                resource: wgpu::BindingResource::TextureView(&default_texture.view),
+            },
+            wgpu::BindGroupEntry {
+                binding: 1,
+                resource: wgpu::BindingResource::Sampler(&default_texture.sampler),
+            },
+        ],
+        label: None,
+    });
+
+    let materials = vec![model::Material {
+        name: "Cylinder_Material".to_string(),
+        diffuse_texture: default_texture,
+        bind_group,
+    }];
+
+    // 创建顶点缓冲区
+    let vertex_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+        label: Some("Cylinder Vertex Buffer"),
+        contents: bytemuck::cast_slice(&vertices),
+        usage: wgpu::BufferUsages::VERTEX,
+    });
+
+    // 创建索引缓冲区
+    let index_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+        label: Some("Cylinder Index Buffer"),
+        contents: bytemuck::cast_slice(&indices),
+        usage: wgpu::BufferUsages::INDEX,
+    });
+
+    // 创建网格
+    let meshes = vec![model::Mesh {
+        name: "Cylinder".to_string(),
+        vertex_buffer,
+        index_buffer,
+        num_elements: indices.len() as u32,
+        material: 0, // 使用第一个材质
+    }];
+
+    Ok(model::Model { meshes, materials })
+}
+
+// 圆柱体生成核心逻辑
+fn generate_cylinder(radius: f32, height: f32, sectors: u32, stacks: u32) -> (Vec<model::ModelVertex>, Vec<u32>) {
+    let mut vertices = Vec::new();
+    let mut indices = Vec::new();
+    let pi = std::f32::consts::PI;
+
+    // 生成圆柱侧面的顶点
+    for i in 0..=stacks {
+        let y = -height / 2.0 + (i as f32 * height / stacks as f32); // 从-bottom到+top
+
+        for j in 0..=sectors {
+            let theta = 2.0 * pi * j as f32 / sectors as f32; // 角度 0~2π
+            let x = radius * theta.cos();
+            let z = radius * theta.sin();
+
+            // 纹理坐标
+            let s = j as f32 / sectors as f32; // 水平纹理坐标
+            let t = i as f32 / stacks as f32;  // 垂直纹理坐标
+
+            // 法线计算（侧面法线指向外侧）
+            let normal = [x / radius, 0.0, z / radius]; // 侧面法线在XZ平面
+
+            vertices.push(model::ModelVertex {
+                position: [x, y, z],
+                tex_coords: [s, t],
+                normal,
+            });
+        }
+    }
+
+    // 生成圆柱上下底面的顶点
+    // 下底面中心
+    let bottom_center_idx = vertices.len() as u32;
+    vertices.push(model::ModelVertex {
+        position: [0.0, -height / 2.0, 0.0],
+        tex_coords: [0.5, 0.5],
+        normal: [0.0, -1.0, 0.0], // 向下
+    });
+
+    // 上底面中心
+    let top_center_idx = vertices.len() as u32;
+    vertices.push(model::ModelVertex {
+        position: [0.0, height / 2.0, 0.0],
+        tex_coords: [0.5, 0.5],
+        normal: [0.0, 1.0, 0.0], // 向上
+    });
+
+    // 添加底面和顶面的边缘顶点
+    for j in 0..=sectors {
+        let theta = 2.0 * pi * j as f32 / sectors as f32;
+        let x = radius * theta.cos();
+        let z = radius * theta.sin();
+
+        // 下底面边缘
+        vertices.push(model::ModelVertex {
+            position: [x, -height / 2.0, z],
+            tex_coords: [0.5 + 0.5 * theta.cos(), 0.5 + 0.5 * theta.sin()],
+            normal: [0.0, -1.0, 0.0], // 向下
+        });
+
+        // 上底面边缘
+        vertices.push(model::ModelVertex {
+            position: [x, height / 2.0, z],
+            tex_coords: [0.5 + 0.5 * theta.cos(), 0.5 + 0.5 * theta.sin()],
+            normal: [0.0, 1.0, 0.0], // 向上
+        });
+    }
+
+    // 生成侧面索引
+    for i in 0..stacks {
+        for j in 0..sectors {
+            let first = i * (sectors + 1) + j;
+            let second = first + sectors + 1;
+
+            indices.push(first);
+            indices.push(first + 1);
+            indices.push(second);
+
+            indices.push(second);
+            indices.push(first + 1);
+            indices.push(second + 1);
+        }
+    }
+
+    // 生成底面索引
+    let bottom_start_idx = bottom_center_idx + 1; // 底面边缘顶点开始的索引
+    for j in 0..sectors {
+        let center = bottom_center_idx;
+        let next = bottom_start_idx + j * 2 + 2; // 下一个边缘顶点
+        let current = bottom_start_idx + j * 2;   // 当前边缘顶点
+
+        // 确保不越界
+        if next < vertices.len() as u32 {
+            indices.push(center);
+            indices.push(next);
+            indices.push(current);
+        } else {
+            // 如果next越界，则使用第一个边缘顶点
+            indices.push(center);
+            indices.push(bottom_start_idx);
+            indices.push(current);
+        }
+    }
+
+    // 生成顶面索引
+    let top_start_idx = bottom_start_idx + 1; // 顶面边缘顶点开始的索引
+    for j in 0..sectors {
+        let center = top_center_idx;
+        let current = top_start_idx + j * 2;   // 当前边缘顶点
+        let next = top_start_idx + j * 2 + 2; // 下一个边缘顶点
+
+        // 确保不越界
+        if next < vertices.len() as u32 {
+            indices.push(center);
+            indices.push(current);
+            indices.push(next);
+        } else {
+            // 如果next越界，则使用第一个边缘顶点
+            indices.push(center);
+            indices.push(current);
+            indices.push(top_start_idx);
+        }
+    }
+
+    (vertices, indices)
+}
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_generate_cylinder() {
+        // Test the generation logic without device-dependent operations
+        let (vertices, indices) = generate_cylinder(1.0, 2.0, 8, 8);
+        
+        // Basic checks
+        assert!(!vertices.is_empty());
+        assert!(!indices.is_empty());
+        assert_eq!(indices.len() % 3, 0); // Should be triangles
+    }
 }

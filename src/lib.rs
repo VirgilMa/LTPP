@@ -7,6 +7,7 @@ cfg_if::cfg_if! {
     }
 }
 
+mod common;
 mod physics;
 mod render;
 
