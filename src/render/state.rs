@@ -72,8 +72,6 @@ pub struct State<'a> {
 
     edge_pipeline: wgpu::RenderPipeline,
 
-    // Edge parameters
-    edge_params_buffer: wgpu::Buffer,
     edge_bind_group: wgpu::BindGroup,
 
     pub camera: Camera,
@@ -82,15 +80,7 @@ pub struct State<'a> {
     camera_bind_group: wgpu::BindGroup,
     camera_controller: CameraController,
 
-    // Outline related
-    // outline_bind_group_layout: wgpu::BindGroupLayout,
-    // outline_params_buffer: wgpu::Buffer,
-    // outline_bind_group: wgpu::BindGroup,
-    obj_instances: Vec<Instance>,
-    instance_buffer: wgpu::Buffer,
-
     depth_texture: super::texture::Texture,
-    obj_model: super::model::Model,
 
     // 存储所有模型实例的集合
     model_instances: Vec<ModelInstance>,
@@ -483,19 +473,19 @@ impl State<'_> {
             .iter()
             .map(Instance::to_raw)
             .collect::<Vec<_>>();
-        let instance_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-            label: Some("Instance Buffer"),
-            contents: bytemuck::cast_slice(&instance_data),
-            usage: wgpu::BufferUsages::VERTEX,
-        });
+        // let instance_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+        //     label: Some("Instance Buffer"),
+        //     contents: bytemuck::cast_slice(&instance_data),
+        //     usage: wgpu::BufferUsages::VERTEX,
+        // });
 
         let depth_texture =
             texture::Texture::create_depth_texture(&device, &config, "depth_texture");
 
-        let obj_model =
-            resource::load_model("cube.obj", &device, &queue, &texture_bind_group_layout)
-                .await
-                .unwrap();
+        // let obj_model =
+        //     resource::load_model("cube.obj", &device, &queue, &texture_bind_group_layout)
+        //         .await
+        //         .unwrap();
 
         // 创建圆柱体实例
         let mut cylinder_instances: Vec<Instance> = vec![];
@@ -584,17 +574,13 @@ impl State<'_> {
             clear_color,
             mesh_pipeline,
             edge_pipeline,
-            edge_params_buffer,
             edge_bind_group,
             camera,
             camera_uniform,
             camera_buffer,
             camera_bind_group,
             camera_controller,
-            obj_instances,
-            instance_buffer,
             depth_texture,
-            obj_model,
             model_instances,
             last_update_time,
             phy_tick_trigger: false,

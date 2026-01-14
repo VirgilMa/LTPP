@@ -322,7 +322,7 @@ impl winit::application::ApplicationHandler for App<'_> {
 
 struct RenderApp<'a>(Option<App<'a>>);
 
-impl<'a> RenderApp<'a> {
+impl RenderApp<'_> {
     fn new() -> Self {
         Self(None)
     }
@@ -334,7 +334,7 @@ pub async fn render() {
     event_loop.run_app(&mut render_app).unwrap();
 }
 
-impl<'a> winit::application::ApplicationHandler for RenderApp<'a> {
+impl winit::application::ApplicationHandler for RenderApp<'_> {
     fn resumed(&mut self, event_loop: &winit::event_loop::ActiveEventLoop) {
         // Only initialize the app once when the application is resumed for the first time
         if self.0.is_none() {
