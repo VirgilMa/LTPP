@@ -23,12 +23,28 @@ Open index.html.
 
 ## TODO
 
+### big 
+
 - [X] camera simple movement
 - [X] fixed 60 frames per second
 - [X] a simple render engine
 - [X] simple GUI, show some immediate infos
 - [X] render a simple sphere
 - [ ] a simple physics engine
-- [ ] a super ball considering torque
 - [ ] water simulation (both physics and rendering)
-- [ ] support skeleton and skeleton animation
+  - [ ] rigid body simulation
+    - [ ] a super ball considering torque
+  - [ ] implict eular
+  - [ ] RK4
+  - [ ] position-based / verlet integration
+- [ ] add grids rendering
+- [ ] try some new techs
+- [ ] a ball considering torque
+- [ ] water simulation (both physics and rendering)
+- [ ] support skeleton and skeleton animation (simplest way)
+- [ ] a timewheel to put all things together (simplest way)
+- [ ] a physical-driven vehicle, including 4 wheels and 2 wheels
+
+### physics
+
+- [ ] a static plane and a dynamic cylinder. the cylinder drop down and bounce up, ending up with a still state.

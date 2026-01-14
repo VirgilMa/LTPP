@@ -1,5 +1,8 @@
+// main cycle is here
+
 use std::sync::Arc;
 
+use crate::get_current_time;
 use crate::render::model::ModelVertex;
 use cgmath::{InnerSpace, Rotation3, Vector3, Zero};
 use wgpu::util::DeviceExt;
@@ -12,6 +15,50 @@ use super::{lib::*, resource, texture};
 
 use super::model::Vertex;
 
+const SPACE_BETWEEN: f32 = 3.0;
+
+// 定义模型实例结构
+pub struct ModelInstance {
+    pub model: super::model::Model,
+    pub instances: Vec<Instance>,
+    pub instance_buffer: wgpu::Buffer,
+}
+
+impl ModelInstance {
+    pub fn new(
+        model: super::model::Model,
+        instances: Vec<Instance>,
+        device: &wgpu::Device,
+    ) -> Self {
+        let instance_data = instances.iter().map(Instance::to_raw).collect::<Vec<_>>();
+        let instance_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            label: Some("Instance Buffer"),
+            contents: bytemuck::cast_slice(&instance_data),
+            usage: wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST,
+        });
+
+        Self {
+            model,
+            instances,
+            instance_buffer,
+        }
+    }
+
+    pub fn update_instance_buffer(&mut self, queue: &wgpu::Queue) {
+        let instance_data = self
+            .instances
+            .iter()
+            .map(Instance::to_raw)
+            .collect::<Vec<_>>();
+
+        queue.write_buffer(
+            &self.instance_buffer,
+            0,
+            bytemuck::cast_slice(&instance_data),
+        );
+    }
+}
+
 pub struct State<'a> {
     pub surface: wgpu::Surface<'a>,
     pub device: wgpu::Device,
@@ -21,7 +68,9 @@ pub struct State<'a> {
     window: Arc<Window>,
     clear_color: wgpu::Color,
 
-    render_pipeline: wgpu::RenderPipeline,
+    mesh_pipeline: wgpu::RenderPipeline,
+
+    edge_pipeline: wgpu::RenderPipeline,
 
     pub camera: Camera,
     camera_uniform: CameraUniform,
@@ -29,25 +78,30 @@ pub struct State<'a> {
     camera_bind_group: wgpu::BindGroup,
     camera_controller: CameraController,
 
+    // Outline related
+    // outline_bind_group_layout: wgpu::BindGroupLayout,
+    // outline_params_buffer: wgpu::Buffer,
+    // outline_bind_group: wgpu::BindGroup,
     obj_instances: Vec<Instance>,
     instance_buffer: wgpu::Buffer,
 
     depth_texture: super::texture::Texture,
     obj_model: super::model::Model,
 
-    sphere_model: super::model::Model,
-    sphere_instances: Vec<Instance>,
-    sphere_instance_buffer: wgpu::Buffer,
+    // 存储所有模型实例的集合
+    model_instances: Vec<ModelInstance>,
+
+    last_update_time: i64,
+
+    pub phy_tick_trigger: bool,
+    pub phy_single_step: bool,
 }
 
 impl State<'_> {
     pub async fn new(window: Arc<Window>) -> Self {
         let size = window.inner_size();
 
-        let instance = wgpu::Instance::new(wgpu::InstanceDescriptor {
-            backends: wgpu::Backends::VULKAN, // 仅启用 Vulkan
-            ..Default::default()
-        });
+        let instance = wgpu::Instance::default();
         let surface = instance.create_surface(window.clone()).unwrap();
 
         let adapter = instance
@@ -112,6 +166,43 @@ impl State<'_> {
                 label: Some("texture_bind_group_layout"),
             });
 
+        // let outline_bind_group_layout =
+        //     device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+        //         entries: &[wgpu::BindGroupLayoutEntry {
+        //             binding: 0,
+        //             visibility: wgpu::ShaderStages::FRAGMENT,
+        //             ty: wgpu::BindingType::Buffer {
+        //                 ty: wgpu::BufferBindingType::Uniform,
+        //                 has_dynamic_offset: false,
+        //                 min_binding_size: None,
+        //             },
+        //             count: None,
+        //         }],
+        //         label: Some("outline_bind_group_layout"),
+        //     });
+
+        // // Create outline parameters buffer and bind group
+        // let outline_params = super::model::OutlineParams {
+        //     outline_color: [0.0, 0.0, 0.0, 1.0], // Black outline
+        //     outline_width: 0.02, // Outline width
+        //     enable_outline: 1.0, // Enable outline
+        // };
+
+        // let outline_params_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+        //     label: Some("Outline Params Buffer"),
+        //     contents: bytemuck::cast_slice(&[outline_params]),
+        //     usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
+        // });
+
+        // let outline_bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
+        //     layout: &outline_bind_group_layout,
+        //     entries: &[wgpu::BindGroupEntry {
+        //         binding: 0,
+        //         resource: wgpu::BindingResource::Buffer(outline_params_buffer.as_entire_buffer_binding()),
+        //     }],
+        //     label: Some("outline_bind_group"),
+        // });
+
         let clear_color = wgpu::Color {
             r: 0.1,
             g: 0.2,
@@ -121,7 +212,7 @@ impl State<'_> {
 
         let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
             label: Some("Shader"),
-            source: wgpu::ShaderSource::Wgsl(include_str!("shaders/shader.wgsl").into()),
+            source: wgpu::ShaderSource::Wgsl(include_str!("shaders/mesh_shader.wgsl").into()),
         });
 
         let camera = Camera {
@@ -167,16 +258,15 @@ impl State<'_> {
             label: Some("camera_bind_group"),
         });
 
-        let render_pipeline_layout =
-            device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
-                label: Some("Render Pipeline Layout"),
-                bind_group_layouts: &[&texture_bind_group_layout, &camera_bind_group_layout],
-                push_constant_ranges: &[],
-            });
+        let mesh_pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+            label: Some("Render Pipeline Layout"),
+            bind_group_layouts: &[&texture_bind_group_layout, &camera_bind_group_layout],
+            push_constant_ranges: &[],
+        });
 
-        let render_pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
-            label: Some("Render Pipeline"),
-            layout: Some(&render_pipeline_layout),
+        let mesh_pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
+            label: Some("Mesh Pipeline"),
+            layout: Some(&mesh_pipeline_layout),
             vertex: wgpu::VertexState {
                 module: &shader,
                 entry_point: Some("vs_main"), // 1.
@@ -223,10 +313,69 @@ impl State<'_> {
             cache: None,
         });
 
+        let edge_shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
+            label: Some("Edge Shader"),
+            source: wgpu::ShaderSource::Wgsl(include_str!("shaders/edge_shader.wgsl").into()),
+        });
+
+        let edge_pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+            label: Some("Edge Pipeline Layout"),
+            bind_group_layouts: &[&texture_bind_group_layout, &camera_bind_group_layout],
+            push_constant_ranges: &[],
+        });
+
+        let edge_pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
+            label: Some("Edge Pipeline"),
+            layout: Some(&edge_pipeline_layout),
+            vertex: wgpu::VertexState {
+                module: &edge_shader,
+                entry_point: Some("vs_main"), // 1.
+                compilation_options: wgpu::PipelineCompilationOptions::default(),
+                buffers: &[ModelVertex::desc(), InstanceRaw::desc()], // 2.
+            },
+            fragment: Some(wgpu::FragmentState {
+                // 3.
+                module: &edge_shader,
+                entry_point: Some("fs_main"),
+                compilation_options: wgpu::PipelineCompilationOptions::default(),
+                targets: &[Some(wgpu::ColorTargetState {
+                    // 4.
+                    format: config.format,
+                    blend: Some(wgpu::BlendState::REPLACE),
+                    write_mask: wgpu::ColorWrites::ALL,
+                })],
+            }),
+            primitive: wgpu::PrimitiveState {
+                topology: wgpu::PrimitiveTopology::LineList, // 1.
+                strip_index_format: None,
+                front_face: wgpu::FrontFace::Ccw, // 2.
+                cull_mode: Some(wgpu::Face::Back),
+                // Setting this to anything other than Fill requires Features::NON_FILL_POLYGON_MODE
+                polygon_mode: wgpu::PolygonMode::Fill,
+                // Requires Features::DEPTH_CLIP_CONTROL
+                unclipped_depth: false,
+                // Requires Features::CONSERVATIVE_RASTERIZATION
+                conservative: false,
+            },
+            depth_stencil: Some(wgpu::DepthStencilState {
+                format: texture::Texture::DEPTH_FORMAT,
+                depth_write_enabled: true,
+                depth_compare: wgpu::CompareFunction::Less, // 1.
+                stencil: wgpu::StencilState::default(),     // 2.
+                bias: wgpu::DepthBiasState::default(),
+            }),
+            multiview: None, // 5.
+            cache: None,
+            multisample: wgpu::MultisampleState {
+                count: 1,                         // 2.
+                mask: !0,                         // 3.
+                alpha_to_coverage_enabled: false, // 4.
+            },
+        });
+
         let camera_controller = CameraController::new(0.2, 1.0, &size);
 
         // instances
-        const SPACE_BETWEEN: f32 = 3.0;
         let mut obj_instances = (0..NUM_INSTANCE_PER_ROW)
             .flat_map(|z| {
                 (0..NUM_INSTANCE_PER_ROW).map(move |x| {
@@ -242,7 +391,11 @@ impl State<'_> {
                         cgmath::Quaternion::from_axis_angle(position.normalize(), cgmath::Deg(45.0))
                     };
 
-                    Instance { position, rotation }
+                    Instance {
+                        position,
+                        rotation,
+                        last_position: position,
+                    }
                 })
             })
             .collect::<Vec<_>>();
@@ -273,39 +426,62 @@ impl State<'_> {
                 .await
                 .unwrap();
 
-        let mut sphere_instances: Vec<Instance> = vec![];
-        sphere_instances.insert(
-            0,
-            Instance {
-                position: Vector3 {
-                    x: 0.0f32,
-                    y: 5.0f32,
-                    z: 0.0f32,
+        // 创建圆柱体实例
+        let mut cylinder_instances: Vec<Instance> = vec![];
+        for i in 0..10 {
+            cylinder_instances.insert(
+                0,
+                Instance {
+                    position: Vector3 {
+                        x: i as f32,
+                        y: 5.0f32,
+                        z: 0.0f32,
+                    },
+                    last_position: Vector3 {
+                        x: i as f32,
+                        y: 5.0f32,
+                        z: 0.0f32,
+                    },
+                    rotation: cgmath::Quaternion::zero(),
                 },
-                rotation: cgmath::Quaternion::zero(),
-            },
-        );
+            );
+        }
 
-        let sphere_instance_data = sphere_instances
-            .iter()
-            .map(Instance::to_raw)
-            .collect::<Vec<_>>();
-        let sphere_instance_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-            label: Some("Instance Buffer"),
-            contents: bytemuck::cast_slice(&sphere_instance_data),
-            usage: wgpu::BufferUsages::VERTEX,
-        });
-
-        let sphere_model = resource::generate_sphere_model(
+        // 创建圆柱体模型（用于填充渲染）
+        let cylinder_model = resource::generate_cylinder_model(
             &device,
             &queue,
             &texture_bind_group_layout,
-            0.2,
+            0.5,
+            1.0,
             32,
             32,
+            None, // Use default color
         )
-        .await
         .unwrap();
+
+        // 创建圆柱体边缘模型（用于边缘渲染）
+        let _cylinder_edge_model = resource::generate_cylinder_edge_model(
+            &device,
+            &queue,
+            &texture_bind_group_layout,
+            0.5,
+            1.0,
+            32,
+            32,
+            None, // Use default color
+        )
+        .unwrap();
+
+        // 创建模型实例集合
+        let mut model_instances = Vec::new();
+
+        // 添加圆柱体模型实例（使用边缘模型作为第二个模型）
+        let cylinder_model_instance =
+            ModelInstance::new(cylinder_model, cylinder_instances, &device);
+        model_instances.push(cylinder_model_instance);
+
+        let last_update_time = get_current_time();
 
         Self {
             window: window.clone(),
@@ -315,7 +491,8 @@ impl State<'_> {
             config,
             size,
             clear_color,
-            render_pipeline,
+            mesh_pipeline,
+            edge_pipeline,
             camera,
             camera_uniform,
             camera_buffer,
@@ -325,9 +502,10 @@ impl State<'_> {
             instance_buffer,
             depth_texture,
             obj_model,
-            sphere_model,
-            sphere_instances,
-            sphere_instance_buffer,
+            model_instances,
+            last_update_time,
+            phy_tick_trigger: false,
+            phy_single_step: false,
         }
     }
 
@@ -351,13 +529,54 @@ impl State<'_> {
         self.camera_controller.process_events(event)
     }
 
-    pub fn phy_update(&mut self) {
+    pub fn phy_update(&mut self, delta_time: i64) {
+        let delta_time_s = (delta_time as f32) / 1000.0;
+        let dt2_div2 = delta_time_s * delta_time_s / 2.0;
+        let acc = Vector3 {
+            x: 0.0,
+            y: -9.8,
+            z: 0.0,
+        };
 
+        // 更新所有模型实例的物理状态
+        for model_instance in &mut self.model_instances {
+            for instance in &mut model_instance.instances {
+                let llast_position = instance.last_position;
+                let last_position = instance.position;
+                instance.last_position = last_position;
+                instance.position = last_position + last_position - llast_position + acc * dt2_div2;
+                // println!(
+                //     "update sphere instance's position: {:?}, delta_time: {}",
+                //     instance.position, delta_time
+                // )
+            }
+        }
+
+        self.phy_update_write_instance_buffer();
+    }
+
+    fn phy_update_write_instance_buffer(&mut self) {
+        // 更新所有模型实例的缓冲区
+        for model_instance in &mut self.model_instances {
+            model_instance.update_instance_buffer(&self.queue);
+        }
     }
 
     pub fn update(&mut self) {
+        let now = get_current_time();
+        let last_time = self.last_update_time;
+        let delta_time = now - last_time;
         self.camera_controller.update_camera(&mut self.camera);
         self.camera_uniform.update_view_proj(&self.camera);
+
+        // 物理更新逻辑：持续运行、单步执行或不执行
+        if self.phy_tick_trigger || self.phy_single_step {
+            self.phy_update(delta_time);
+            // 如果是单步执行，则执行后重置标志
+            if self.phy_single_step {
+                self.phy_single_step = false;
+            }
+        }
 
         // 模型的移动更新都可以通过类似的write_buffer来实现
         self.queue.write_buffer(
@@ -365,6 +584,26 @@ impl State<'_> {
             0,
             bytemuck::cast_slice(&[self.camera_uniform]),
         );
+
+        self.last_update_time = now
+    }
+
+    pub fn reset_physics(&mut self) {
+        // 重置所有模型实例
+        for model_instance in &mut self.model_instances {
+            for (i, instance) in model_instance.instances.iter_mut().enumerate() {
+                instance.position = Vector3 {
+                    x: i as f32,
+                    y: 5.0f32,
+                    z: 0.0f32,
+                };
+                instance.last_position = instance.position;
+                instance.rotation = cgmath::Quaternion::zero();
+            }
+        }
+
+        // 更新 GPU 实例缓冲区以反映重置的位置
+        self.phy_update_write_instance_buffer();
     }
 
     pub fn scene_render(&mut self, view: &TextureView) -> Result<(), wgpu::SurfaceError> {
@@ -397,7 +636,7 @@ impl State<'_> {
                 occlusion_query_set: None,
             });
 
-            render_pass.set_pipeline(&self.render_pipeline);
+            render_pass.set_pipeline(&self.mesh_pipeline);
             // render_pass.set_vertex_buffer(1, self.instance_buffer.slice(..));
 
             use super::model::DrawModel;
@@ -410,16 +649,39 @@ impl State<'_> {
             //     &self.camera_bind_group,
             // );
 
-            // draw spheres
-            render_pass.set_vertex_buffer(1, self.sphere_instance_buffer.slice(..));
-            let sphere_mesh = &self.sphere_model.meshes[0];
-            let sphere_material = &self.sphere_model.materials[sphere_mesh.material];
-            render_pass.draw_mesh_instanced(
-                sphere_mesh,
-                sphere_material,
-                0..self.sphere_instances.len() as u32,
-                &self.camera_bind_group,
-            );
+            // 渲染所有模型实例
+            for model_instance in &self.model_instances {
+                // 渲染填充模型（第一个网格）
+                render_pass.set_pipeline(&self.mesh_pipeline);
+                render_pass.set_vertex_buffer(1, model_instance.instance_buffer.slice(..));
+
+                if !model_instance.model.meshes.is_empty() {
+                    let fill_mesh = &model_instance.model.meshes[0];
+                    let material = &model_instance.model.materials[fill_mesh.material];
+
+                    render_pass.draw_mesh_instanced(
+                        fill_mesh,
+                        material,
+                        0..model_instance.instances.len() as u32,
+                        &self.camera_bind_group,
+                    );
+                }
+
+                // 渲染边缘（第二个网格）
+                if model_instance.model.meshes.len() > 1 {
+                    render_pass.set_pipeline(&self.edge_pipeline);
+                    render_pass.set_vertex_buffer(1, model_instance.instance_buffer.slice(..));
+
+                    let edge_mesh = &model_instance.model.meshes[1];
+                    let edge_material = &model_instance.model.materials[edge_mesh.material];
+                    render_pass.draw_mesh_instanced(
+                        edge_mesh,
+                        edge_material,
+                        0..model_instance.instances.len() as u32,
+                        &self.camera_bind_group,
+                    );
+                }
+            }
         }
 
         self.queue.submit(std::iter::once(encoder.finish()));

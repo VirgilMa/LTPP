@@ -59,6 +59,15 @@ pub struct Mesh {
     pub material: usize,
 }
 
+// Struct for outline parameters
+#[repr(C)]
+#[derive(Copy, Clone, Debug, bytemuck::Pod, bytemuck::Zeroable)]
+pub struct OutlineParams {
+    pub outline_color: [f32; 4],
+    pub outline_width: f32,
+    pub enable_outline: f32,
+}
+
 pub trait DrawModel<'a> {
     fn draw_mesh(
         &mut self,
@@ -72,6 +81,21 @@ pub trait DrawModel<'a> {
         material: &'a Material,
         instances: Range<u32>,
         camera_bind_group: &'a wgpu::BindGroup,
+    );
+    fn draw_mesh_with_outline(
+        &mut self,
+        mesh: &'a Mesh,
+        material: &'a Material,
+        camera_bind_group: &'a wgpu::BindGroup,
+        outline_bind_group: &'a wgpu::BindGroup,
+    );
+    fn draw_mesh_instanced_with_outline(
+        &mut self,
+        mesh: &'a Mesh,
+        material: &'a Material,
+        instances: Range<u32>,
+        camera_bind_group: &'a wgpu::BindGroup,
+        outline_bind_group: &'a wgpu::BindGroup,
     );
 }
 
@@ -99,6 +123,40 @@ where
         self.set_index_buffer(mesh.index_buffer.slice(..), wgpu::IndexFormat::Uint32);
         self.set_bind_group(0, &material.bind_group, &[]);
         self.set_bind_group(1, camera_bind_group, &[]);
+        self.draw_indexed(0..mesh.num_elements, 0, instances);
+    }
+
+    fn draw_mesh_with_outline(
+        &mut self,
+        mesh: &'b Mesh,
+        material: &'b Material,
+        camera_bind_group: &'b wgpu::BindGroup,
+        outline_bind_group: &'b wgpu::BindGroup,
+    ) {
+        self.draw_mesh_instanced_with_outline(
+            mesh,
+            material,
+            0..1,
+            camera_bind_group,
+            outline_bind_group,
+        );
+    }
+
+    fn draw_mesh_instanced_with_outline(
+        &mut self,
+        mesh: &'b Mesh,
+        material: &'b Material,
+        instances: Range<u32>,
+        camera_bind_group: &'b wgpu::BindGroup,
+        outline_bind_group: &'b wgpu::BindGroup,
+    ) {
+        // Set buffers and bind groups
+        self.set_vertex_buffer(0, mesh.vertex_buffer.slice(..));
+        self.set_index_buffer(mesh.index_buffer.slice(..), wgpu::IndexFormat::Uint32);
+        self.set_bind_group(0, &material.bind_group, &[]);
+        self.set_bind_group(1, camera_bind_group, &[]);
+        self.set_bind_group(2, outline_bind_group, &[]); // Add outline bind group
+
         self.draw_indexed(0..mesh.num_elements, 0, instances);
     }
 }

@@ -13,6 +13,20 @@ appenders:
         pattern: "logs/app.log.{}"
         count: 5 # 保留最近 5 个日志文件
         base: 1
+  console:
+    kind: console
+    encoder:
+      kind: pattern
+      pattern: "[%d] [%l] [%c] - %m%n"  # 文件日志简化格式
+
+loggers:
+  wgpu:
+    level: trace
+    appenders:
+      - console
+      - file
+    additive: true
+
 
 root:
   level: debug

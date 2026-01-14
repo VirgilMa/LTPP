@@ -1,4 +1,5 @@
 use log::{debug, info};
+use chrono::Utc;
 
 cfg_if::cfg_if! {
     if #[cfg(target_arch = "wasm32")] {
@@ -6,7 +7,7 @@ cfg_if::cfg_if! {
     }
 }
 
-pub mod objmgr;
+mod common;
 mod physics;
 mod render;
 
@@ -14,6 +15,13 @@ pub fn setup_logger() {
     log4rs::init_file("log4rs.yaml", Default::default()).unwrap();
 
     info!("init logger")
+}
+
+pub fn get_current_time() -> i64 {
+    // 获取当前 UTC 时间
+    let now = Utc::now();
+    // 获取以毫秒为单位的时间戳
+    now.timestamp_millis()
 }
 
 #[cfg_attr(target_arch = "wasm32", wasm_bindgen(start))]
