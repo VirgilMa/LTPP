@@ -72,6 +72,10 @@ pub struct State<'a> {
 
     edge_pipeline: wgpu::RenderPipeline,
 
+    // Edge parameters
+    edge_params_buffer: wgpu::Buffer,
+    edge_bind_group: wgpu::BindGroup,
+
     pub camera: Camera,
     camera_uniform: CameraUniform,
     camera_buffer: wgpu::Buffer,
@@ -95,6 +99,18 @@ pub struct State<'a> {
 
     pub phy_tick_trigger: bool,
     pub phy_single_step: bool,
+
+    // FPS 限制相关
+    pub max_fps: f64,
+
+    // 物理模拟时间步长（与渲染帧率解耦）
+    pub physics_time_step: f64,  // 固定物理时间步长，如 1/60 秒
+    pub accumulated_time: f64,   // 累积时间，用于物理更新
+
+    // FPS 计算相关
+    pub frame_count: u32,
+    pub last_fps_update: std::time::Instant,
+    pub current_fps: f64,
 }
 
 impl State<'_> {
@@ -318,10 +334,54 @@ impl State<'_> {
             source: wgpu::ShaderSource::Wgsl(include_str!("shaders/edge_shader.wgsl").into()),
         });
 
+        // Create bind group layout for edge parameters
+        let edge_params_bind_group_layout =
+            device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+                entries: &[wgpu::BindGroupLayoutEntry {
+                    binding: 0,
+                    visibility: wgpu::ShaderStages::VERTEX,
+                    ty: wgpu::BindingType::Buffer {
+                        ty: wgpu::BufferBindingType::Uniform,
+                        has_dynamic_offset: false,
+                        min_binding_size: None,
+                    },
+                    count: None,
+                }],
+                label: Some("edge_params_bind_group_layout"),
+            });
+
         let edge_pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
             label: Some("Edge Pipeline Layout"),
-            bind_group_layouts: &[&texture_bind_group_layout, &camera_bind_group_layout],
+            bind_group_layouts: &[&texture_bind_group_layout, &camera_bind_group_layout, &edge_params_bind_group_layout],
             push_constant_ranges: &[],
+        });
+
+        // Define edge parameters struct
+        #[repr(C)]
+        #[derive(Copy, Clone, bytemuck::Pod, bytemuck::Zeroable)]
+        struct EdgeParams {
+            thickness: f32,
+            _padding: [f32; 3], // Padding to align to 16 bytes
+        }
+
+        let edge_params = EdgeParams {
+            thickness: 5.0, // Make the edges much thicker
+            _padding: [0.0; 3],
+        };
+
+        let edge_params_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            label: Some("Edge Params Buffer"),
+            contents: bytemuck::cast_slice(&[edge_params]),
+            usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
+        });
+
+        let edge_bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
+            layout: &edge_params_bind_group_layout,
+            entries: &[wgpu::BindGroupEntry {
+                binding: 0,
+                resource: edge_params_buffer.as_entire_binding(),
+            }],
+            label: Some("edge_bind_group"),
         });
 
         let edge_pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
@@ -341,7 +401,18 @@ impl State<'_> {
                 targets: &[Some(wgpu::ColorTargetState {
                     // 4.
                     format: config.format,
-                    blend: Some(wgpu::BlendState::REPLACE),
+                    blend: Some(wgpu::BlendState {
+                        color: wgpu::BlendComponent {
+                            src_factor: wgpu::BlendFactor::SrcAlpha,
+                            dst_factor: wgpu::BlendFactor::OneMinusSrcAlpha,
+                            operation: wgpu::BlendOperation::Add,
+                        },
+                        alpha: wgpu::BlendComponent {
+                            src_factor: wgpu::BlendFactor::One,
+                            dst_factor: wgpu::BlendFactor::OneMinusSrcAlpha,
+                            operation: wgpu::BlendOperation::Add,
+                        },
+                    }),
                     write_mask: wgpu::ColorWrites::ALL,
                 })],
             }),
@@ -461,7 +532,7 @@ impl State<'_> {
         .unwrap();
 
         // 创建圆柱体边缘模型（用于边缘渲染）
-        let _cylinder_edge_model = resource::generate_cylinder_edge_model(
+        let cylinder_edge_model = resource::generate_cylinder_edge_model(
             &device,
             &queue,
             &texture_bind_group_layout,
@@ -473,12 +544,32 @@ impl State<'_> {
         )
         .unwrap();
 
+        // 将边缘模型的网格和材质合并到主模型中
+        let combined_model = {
+            let mut meshes = cylinder_model.meshes;
+            // 调整边缘网格的材质索引，因为我们要合并材质
+            let mut edge_meshes = cylinder_edge_model.meshes;
+            for mesh in &mut edge_meshes {
+                // 边缘网格使用边缘模型的材质，其索引需要调整
+                mesh.material += cylinder_model.materials.len(); // 边缘材质索引从填充材质之后开始
+            }
+            meshes.extend(edge_meshes);
+
+            let mut materials = cylinder_model.materials;
+            materials.extend(cylinder_edge_model.materials);
+
+            super::model::Model {
+                meshes,
+                materials,
+            }
+        };
+
         // 创建模型实例集合
         let mut model_instances = Vec::new();
 
-        // 添加圆柱体模型实例（使用边缘模型作为第二个模型）
+        // 添加圆柱体模型实例（包含填充和边缘网格）
         let cylinder_model_instance =
-            ModelInstance::new(cylinder_model, cylinder_instances, &device);
+            ModelInstance::new(combined_model, cylinder_instances, &device);
         model_instances.push(cylinder_model_instance);
 
         let last_update_time = get_current_time();
@@ -493,6 +584,8 @@ impl State<'_> {
             clear_color,
             mesh_pipeline,
             edge_pipeline,
+            edge_params_buffer,
+            edge_bind_group,
             camera,
             camera_uniform,
             camera_buffer,
@@ -506,6 +599,12 @@ impl State<'_> {
             last_update_time,
             phy_tick_trigger: false,
             phy_single_step: false,
+            max_fps: 60.0,  // 默认60 FPS
+            physics_time_step: 1.0 / 60.0,  // 固定物理时间步长为 1/60 秒
+            accumulated_time: 0.0,          // 初始累积时间为 0
+            frame_count: 0,                 // 初始帧计数为 0
+            last_fps_update: std::time::Instant::now(), // FPS 更新时间
+            current_fps: 0.0,               // 初始 FPS 为 0
         }
     }
 
@@ -564,14 +663,38 @@ impl State<'_> {
 
     pub fn update(&mut self) {
         let now = get_current_time();
-        let last_time = self.last_update_time;
-        let delta_time = now - last_time;
+        let delta_time = now - self.last_update_time;
+
+        // 更新 FPS 计算
+        self.frame_count += 1;
+        let elapsed_since_fps_update = self.last_fps_update.elapsed().as_secs_f64();
+        if elapsed_since_fps_update >= 1.0 {
+            self.current_fps = self.frame_count as f64 / elapsed_since_fps_update;
+            self.frame_count = 0;
+            self.last_fps_update = std::time::Instant::now();
+        }
+
         self.camera_controller.update_camera(&mut self.camera);
         self.camera_uniform.update_view_proj(&self.camera);
 
         // 物理更新逻辑：持续运行、单步执行或不执行
+        // 使用固定时间步长，与渲染帧率解耦
         if self.phy_tick_trigger || self.phy_single_step {
-            self.phy_update(delta_time);
+            // 将时间转换为秒
+            let delta_time_seconds = delta_time as f64 / 1000.0; // 假设 get_current_time 返回毫秒
+
+            // 累积时间
+            self.accumulated_time += delta_time_seconds;
+
+            // 使用固定时间步长进行物理更新
+            while self.accumulated_time >= self.physics_time_step {
+                // 执行固定时间步长的物理更新
+                self.phy_update((self.physics_time_step * 1000.0) as i64); // 转换回毫秒
+
+                // 减去一个时间步长
+                self.accumulated_time -= self.physics_time_step;
+            }
+
             // 如果是单步执行，则执行后重置标志
             if self.phy_single_step {
                 self.phy_single_step = false;
@@ -667,12 +790,12 @@ impl State<'_> {
                     );
                 }
 
-                // 渲染边缘（第二个网格）
-                if model_instance.model.meshes.len() > 1 {
+                // 渲染边缘（第二个网格，如果存在）
+                if let Some(edge_mesh) = model_instance.model.meshes.get(1) {
                     render_pass.set_pipeline(&self.edge_pipeline);
                     render_pass.set_vertex_buffer(1, model_instance.instance_buffer.slice(..));
+                    render_pass.set_bind_group(2, &self.edge_bind_group, &[]); // Set edge parameters bind group
 
-                    let edge_mesh = &model_instance.model.meshes[1];
                     let edge_material = &model_instance.model.materials[edge_mesh.material];
                     render_pass.draw_mesh_instanced(
                         edge_mesh,

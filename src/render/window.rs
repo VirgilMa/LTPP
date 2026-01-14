@@ -4,13 +4,12 @@ use std::time::{Duration, Instant};
 use super::state::State;
 use cgmath;
 use imgui::FontSource;
-use imgui_wgpu::{Renderer, RendererConfig};
+use imgui_wgpu::RendererConfig;
 use imgui_winit_support::WinitPlatform;
 use wgpu::TextureView;
 use winit::{
-    event::{Event, KeyEvent, WindowEvent},
+    event::{Event, WindowEvent},
     event_loop::{ActiveEventLoop, EventLoop},
-    keyboard,
 };
 
 struct FpsCounter {
@@ -29,7 +28,8 @@ impl FpsCounter {
         self.count += 1;
         let du = Instant::now() - self.timestamp;
         if du >= Duration::from_secs(1) {
-            println!("fps: {}", self.count);
+            // 注释掉FPS打印，保留计算逻辑
+            // println!("fps: {}", self.count);
             self.count = 0;
             self.timestamp = Instant::now();
         }
@@ -46,6 +46,8 @@ struct App<'a> {
     fps_counter: FpsCounter,
     state: State<'a>,
     imgui: Option<ImguiState>,
+    should_exit: bool,
+    last_frame_time: std::time::Instant,
 }
 
 impl<'a> App<'a> {
@@ -56,6 +58,8 @@ impl<'a> App<'a> {
             fps_counter,
             state,
             imgui: None,
+            should_exit: false,
+            last_frame_time: std::time::Instant::now(),
         };
 
         app.setup_imgui();
@@ -146,7 +150,7 @@ impl<'a> App<'a> {
             // 创建一个 ImGui 窗口并显示相机位置
             let window_pos = [0.0, 0.0];
             ui.window("Info")
-                .size([300.0, 140.0], imgui::Condition::FirstUseEver)
+                .size([400.0, 350.0], imgui::Condition::FirstUseEver)
                 .position(window_pos, imgui::Condition::FirstUseEver)
                 .build(|| {
                     // Camera section
@@ -187,6 +191,28 @@ impl<'a> App<'a> {
                             self.state.phy_single_step = true;
                         }
                     }
+
+                    ui.separator();
+                    // 显示当前实际 FPS
+                    ui.text(format!("Current FPS: {:.1}", self.state.current_fps));
+
+                    // FPS 限制控制
+                    ui.text("FPS Limit");
+                    let mut fps_limit = self.state.max_fps as f32;
+                    if ui.slider_config("##FPS", 0.0, 240.0).display_format("%.0f").build(&mut fps_limit) {
+                        self.state.max_fps = fps_limit as f64;
+                    }
+                    if fps_limit == 0.0 {
+                        ui.text("Unlimited FPS");
+                    } else {
+                        ui.text(format!("Max FPS: {:.0}", fps_limit));
+                    }
+
+                    ui.separator();
+                    if ui.button("Exit Application") {
+                        // 设置退出标志
+                        self.should_exit = true;
+                    }
                 });
         }
 
@@ -226,7 +252,26 @@ impl<'a> App<'a> {
 impl winit::application::ApplicationHandler for App<'_> {
     fn resumed(&mut self, _event_loop: &winit::event_loop::ActiveEventLoop) {}
 
-    fn about_to_wait(&mut self, _event_loop: &ActiveEventLoop) {
+    fn about_to_wait(&mut self, event_loop: &ActiveEventLoop) {
+        if self.should_exit {
+            event_loop.exit();
+            return;
+        }
+
+        // 检查是否需要等待下一帧以限制 FPS
+        if self.state.max_fps > 0.0 {
+            let elapsed = self.last_frame_time.elapsed();
+            let target_frame_time = std::time::Duration::from_secs_f64(1.0 / self.state.max_fps);
+
+            if elapsed < target_frame_time {
+                // 等待直到达到目标帧时间
+                std::thread::sleep(target_frame_time - elapsed);
+            }
+        }
+
+        // 更新上次帧时间
+        self.last_frame_time = std::time::Instant::now();
+
         self.state.window().request_redraw();
     }
 
@@ -255,15 +300,7 @@ impl winit::application::ApplicationHandler for App<'_> {
                 self.render(event_loop);
                 self.fps_counter.count();
             }
-            WindowEvent::CloseRequested
-            | WindowEvent::KeyboardInput {
-                event:
-                    KeyEvent {
-                        logical_key: keyboard::Key::Named(keyboard::NamedKey::Escape),
-                        ..
-                    },
-                ..
-            } => {
+            WindowEvent::CloseRequested => {
                 println!("received {:?}. EXIT", event);
                 event_loop.exit();
             }
@@ -283,36 +320,71 @@ impl winit::application::ApplicationHandler for App<'_> {
     }
 }
 
+struct RenderApp<'a>(Option<App<'a>>);
+
+impl<'a> RenderApp<'a> {
+    fn new() -> Self {
+        Self(None)
+    }
+}
+
 pub async fn render() {
     let event_loop = EventLoop::new().unwrap();
+    let mut render_app = RenderApp::new();
+    event_loop.run_app(&mut render_app).unwrap();
+}
 
-    let window_attributes = winit::window::WindowAttributes::default()
-        .with_title("LTPP")
-        .with_inner_size(winit::dpi::LogicalSize::new(800, 600));
+impl<'a> winit::application::ApplicationHandler for RenderApp<'a> {
+    fn resumed(&mut self, event_loop: &winit::event_loop::ActiveEventLoop) {
+        // Only initialize the app once when the application is resumed for the first time
+        if self.0.is_none() {
+            let window_attributes = winit::window::WindowAttributes::default()
+                .with_title("LTPP")
+                .with_inner_size(winit::dpi::LogicalSize::new(800, 600));
 
-    // todo: move "create window procedure" to resume
-    let window = Arc::new(event_loop.create_window(window_attributes).unwrap());
+            let window = Arc::new(event_loop.create_window(window_attributes).unwrap());
 
-    #[cfg(target_arch = "wasm32")]
-    {
-        // Winit prevents sizing with CSS, so we have to set
-        // the size manually when on web.
-        window.set_inner_size(winit::dpi::PhysicalSize::new(450, 400));
+            #[cfg(target_arch = "wasm32")]
+            {
+                // Winit prevents sizing with CSS, so we have to set
+                // the size manually when on web.
+                window.set_inner_size(winit::dpi::PhysicalSize::new(450, 400));
 
-        use winit::platform::web::WindowExtWebSys;
-        web_sys::window()
-            .and_then(|win| win.document())
-            .and_then(|doc| {
-                let dst = doc.get_element_by_id("wasm-example")?;
-                let canvas = web_sys::Element::from(window.canvas());
-                dst.append_child(&canvas).ok()?;
-                Some(())
-            })
-            .expect("Couldn't append canvas to document body.");
+                use winit::platform::web::WindowExtWebSys;
+                web_sys::window()
+                    .and_then(|win| win.document())
+                    .and_then(|doc| {
+                        let dst = doc.get_element_by_id("wasm-example")?;
+                        let canvas = web_sys::Element::from(window.canvas());
+                        dst.append_child(&canvas).ok()?;
+                        Some(())
+                    })
+                    .expect("Couldn't append canvas to document body.");
+            }
+
+            let state = pollster::block_on(State::new(window.clone()));
+            self.0 = Some(App::new(state));
+        }
+
+        if let Some(app) = self.0.as_mut() {
+            app.resumed(event_loop);
+        }
     }
 
-    let state = State::new(window.clone()).await;
-    let mut app = App::new(state);
+    fn about_to_wait(&mut self, event_loop: &ActiveEventLoop) {
+        if let Some(app) = self.0.as_mut() {
+            app.about_to_wait(event_loop);
+        }
+    }
 
-    event_loop.run_app(&mut app).unwrap();
+    fn window_event(
+        &mut self,
+        event_loop: &winit::event_loop::ActiveEventLoop,
+        window_id: winit::window::WindowId,
+        event: winit::event::WindowEvent,
+    ) {
+        if let Some(app) = self.0.as_mut() {
+            app.window_event(event_loop, window_id, event);
+        }
+    }
 }

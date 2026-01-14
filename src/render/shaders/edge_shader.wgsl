@@ -5,6 +5,13 @@ struct CameraUniform {
 @group(1) @binding(0) // 1.
 var<uniform> camera: CameraUniform;
 
+// Uniform for controlling edge thickness
+struct EdgeParams {
+    thickness: f32,
+};
+@group(2) @binding(0)
+var<uniform> edge_params: EdgeParams;
+
 struct VertexInput {
     @location(0) position: vec3<f32>,
     @location(1) tex_coords: vec2<f32>,
@@ -40,7 +47,12 @@ fn vs_main(
     out.tex_coords = model.tex_coords;
     out.world_pos = (model_matrix * vec4<f32>(model.position, 1.0)).xyz;
     out.world_normal = (model_matrix * vec4<f32>(model.normal, 0.0)).xyz;
-    out.clip_position = camera.view_proj * vec4<f32>(out.world_pos, 1.0);
+
+    // Apply view-projection transformation
+    let world_pos_homogeneous = vec4<f32>(out.world_pos, 1.0);
+    out.clip_position = camera.view_proj * world_pos_homogeneous;
+
+    // Slightly offset to avoid z-fighting with the main model
     out.world_pos.z += 0.00001;
     return out;
 }
