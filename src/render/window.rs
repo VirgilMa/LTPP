@@ -176,20 +176,27 @@ impl<'a> App<'a> {
                     ui.separator();
                     ui.text("Physics");
                     ui.separator();
+
+                    // 添加一个开关来控制物理模拟
+                    if ui.button(if self.state.phy_tick_trigger {
+                        "Disable Physics"
+                    } else {
+                        "Enable Physics"
+                    }) {
+                        self.state.phy_tick_trigger = !self.state.phy_tick_trigger;
+                    }
+
                     if ui.button("Reset Physics") {
                         // Reset physics simulation
                         self.state.reset_physics();
                     }
 
-                    // 添加一个开关来控制物理模拟
-                    ui.checkbox("Enable Physics", &mut self.state.phy_tick_trigger);
-
-                    // 只有在物理模拟未启用时才显示 Step 按钮
-                    if !self.state.phy_tick_trigger {
-                        if ui.button("Step Physics") {
-                            // 当点击 Step 按钮时，设置单步执行标志
-                            self.state.phy_single_step = true;
-                        }
+                    // 物理模拟启用时，Step 按钮置灰
+                    if self.state.phy_tick_trigger {
+                        ui.text_disabled("Step Physics");
+                    } else if ui.button("Step Physics") {
+                        // 当点击 Step 按钮时，设置单步执行标志
+                        self.state.phy_single_step = true;
                     }
 
                     ui.separator();
@@ -199,7 +206,11 @@ impl<'a> App<'a> {
                     // FPS 限制控制
                     ui.text("FPS Limit");
                     let mut fps_limit = self.state.max_fps as f32;
-                    if ui.slider_config("##FPS", 0.0, 240.0).display_format("%.0f").build(&mut fps_limit) {
+                    if ui
+                        .slider_config("##FPS", 0.0, 240.0)
+                        .display_format("%.0f")
+                        .build(&mut fps_limit)
+                    {
                         self.state.max_fps = fps_limit as f64;
                     }
                     if fps_limit == 0.0 {
@@ -340,7 +351,7 @@ impl winit::application::ApplicationHandler for RenderApp<'_> {
         if self.0.is_none() {
             let window_attributes = winit::window::WindowAttributes::default()
                 .with_title("LTPP")
-                .with_inner_size(winit::dpi::LogicalSize::new(800, 600));
+                .with_inner_size(winit::dpi::LogicalSize::new(1920, 1080));
 
             let window = Arc::new(event_loop.create_window(window_attributes).unwrap());
 
