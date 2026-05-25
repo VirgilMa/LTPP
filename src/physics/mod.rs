@@ -1,3 +1,3 @@
-pub mod shape;
 pub mod collision;
 pub mod phymgr;
+pub mod shape;

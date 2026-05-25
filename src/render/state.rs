@@ -5,6 +5,7 @@ use std::sync::Arc;
 use crate::get_current_time;
 use crate::render::model::ModelVertex;
 use cgmath::{InnerSpace, Rotation3, Vector3, Zero};
+use web_time::Instant;
 use wgpu::util::DeviceExt;
 use wgpu::TextureView;
 use winit::event::WindowEvent;
@@ -94,18 +95,60 @@ pub struct State<'a> {
     pub max_fps: f64,
 
     // 物理模拟时间步长（与渲染帧率解耦）
-    pub physics_time_step: f64,  // 固定物理时间步长，如 1/60 秒
-    pub accumulated_time: f64,   // 累积时间，用于物理更新
+    pub physics_time_step: f64, // 固定物理时间步长，如 1/60 秒
+    pub accumulated_time: f64,  // 累积时间，用于物理更新
 
     // FPS 计算相关
     pub frame_count: u32,
-    pub last_fps_update: std::time::Instant,
+    pub last_fps_update: Instant,
     pub current_fps: f64,
+}
+
+fn initial_surface_size(window: &Window) -> winit::dpi::PhysicalSize<u32> {
+    #[cfg(target_arch = "wasm32")]
+    {
+        use winit::platform::web::WindowExtWebSys;
+
+        let mut size = window.inner_size();
+        if size.width == 0 || size.height == 0 {
+            if let Some(web_window) = web_sys::window() {
+                let scale_factor = web_window.device_pixel_ratio();
+                let width = web_window
+                    .inner_width()
+                    .ok()
+                    .and_then(|value| value.as_f64())
+                    .unwrap_or(800.0);
+                let height = web_window
+                    .inner_height()
+                    .ok()
+                    .and_then(|value| value.as_f64())
+                    .unwrap_or(600.0);
+
+                size = winit::dpi::PhysicalSize::new(
+                    (width * scale_factor).max(1.0) as u32,
+                    (height * scale_factor).max(1.0) as u32,
+                );
+                let _ = window.request_inner_size(size);
+
+                if let Some(canvas) = window.canvas() {
+                    canvas.set_width(size.width);
+                    canvas.set_height(size.height);
+                }
+            }
+        }
+
+        size
+    }
+
+    #[cfg(not(target_arch = "wasm32"))]
+    {
+        window.inner_size()
+    }
 }
 
 impl State<'_> {
     pub async fn new(window: Arc<Window>) -> Self {
-        let size = window.inner_size();
+        let size = initial_surface_size(&window);
 
         let instance = wgpu::Instance::default();
         let surface = instance.create_surface(window.clone()).unwrap();
@@ -342,7 +385,11 @@ impl State<'_> {
 
         let edge_pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
             label: Some("Edge Pipeline Layout"),
-            bind_group_layouts: &[&texture_bind_group_layout, &camera_bind_group_layout, &edge_params_bind_group_layout],
+            bind_group_layouts: &[
+                &texture_bind_group_layout,
+                &camera_bind_group_layout,
+                &edge_params_bind_group_layout,
+            ],
             push_constant_ranges: &[],
         });
 
@@ -548,10 +595,7 @@ impl State<'_> {
             let mut materials = cylinder_model.materials;
             materials.extend(cylinder_edge_model.materials);
 
-            super::model::Model {
-                meshes,
-                materials,
-            }
+            super::model::Model { meshes, materials }
         };
 
         // 创建模型实例集合
@@ -585,12 +629,12 @@ impl State<'_> {
             last_update_time,
             phy_tick_trigger: false,
             phy_single_step: false,
-            max_fps: 60.0,  // 默认60 FPS
-            physics_time_step: 1.0 / 60.0,  // 固定物理时间步长为 1/60 秒
-            accumulated_time: 0.0,          // 初始累积时间为 0
-            frame_count: 0,                 // 初始帧计数为 0
-            last_fps_update: std::time::Instant::now(), // FPS 更新时间
-            current_fps: 0.0,               // 初始 FPS 为 0
+            max_fps: 60.0,                   // 默认60 FPS
+            physics_time_step: 1.0 / 60.0,   // 固定物理时间步长为 1/60 秒
+            accumulated_time: 0.0,           // 初始累积时间为 0
+            frame_count: 0,                  // 初始帧计数为 0
+            last_fps_update: Instant::now(), // FPS 更新时间
+            current_fps: 0.0,                // 初始 FPS 为 0
         }
     }
 
@@ -657,7 +701,7 @@ impl State<'_> {
         if elapsed_since_fps_update >= 1.0 {
             self.current_fps = self.frame_count as f64 / elapsed_since_fps_update;
             self.frame_count = 0;
-            self.last_fps_update = std::time::Instant::now();
+            self.last_fps_update = Instant::now();
         }
 
         self.camera_controller.update_camera(&mut self.camera);

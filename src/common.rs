@@ -56,30 +56,32 @@ impl Transform {
     /// 应用另一个变换
     pub fn concat(&self, other: &Transform) -> Self {
         let new_matrix = self.to_matrix() * other.to_matrix();
-        
+
         // 从变换矩阵提取平移
-        let translation = Vector3::new(
-            new_matrix[3][0],
-            new_matrix[3][1],
-            new_matrix[3][2],
-        );
-        
+        let translation = Vector3::new(new_matrix[3][0], new_matrix[3][1], new_matrix[3][2]);
+
         // 从变换矩阵提取旋转（仅当没有剪切时有效）
         let scale_x = new_matrix[0].truncate().magnitude();
         let scale_y = new_matrix[1].truncate().magnitude();
         let scale_z = new_matrix[2].truncate().magnitude();
-        
+
         let scale = Vector3::new(scale_x, scale_y, scale_z);
-        
+
         // 标准化旋转矩阵部分
         let rot_matrix = Matrix3::new(
-            new_matrix[0][0] / scale.x, new_matrix[0][1] / scale.x, new_matrix[0][2] / scale.x,
-            new_matrix[1][0] / scale.y, new_matrix[1][1] / scale.y, new_matrix[1][2] / scale.y,
-            new_matrix[2][0] / scale.z, new_matrix[2][1] / scale.z, new_matrix[2][2] / scale.z,
+            new_matrix[0][0] / scale.x,
+            new_matrix[0][1] / scale.x,
+            new_matrix[0][2] / scale.x,
+            new_matrix[1][0] / scale.y,
+            new_matrix[1][1] / scale.y,
+            new_matrix[1][2] / scale.y,
+            new_matrix[2][0] / scale.z,
+            new_matrix[2][1] / scale.z,
+            new_matrix[2][2] / scale.z,
         );
-        
+
         let rotation = Quaternion::from(rot_matrix);
-        
+
         Self {
             translation,
             rotation,
@@ -112,7 +114,7 @@ pub type Mat3 = Matrix3<f32>;
 pub type Mat4 = Matrix4<f32>;
 
 /// 用于物理模拟的时间步长常量
-pub const PHYSICS_TIMESTEP: f32 = 1.0 / 60.0;  // 60 FPS
+pub const PHYSICS_TIMESTEP: f32 = 1.0 / 60.0; // 60 FPS
 
 #[cfg(test)]
 mod tests {
@@ -130,7 +132,7 @@ mod tests {
     fn test_transform_to_matrix() {
         let t = Transform::translation(1.0, 2.0, 3.0);
         let matrix = t.to_matrix();
-        
+
         assert_eq!(matrix[3][0], 1.0);
         assert_eq!(matrix[3][1], 2.0);
         assert_eq!(matrix[3][2], 3.0);
@@ -141,7 +143,7 @@ mod tests {
         let t1 = Transform::translation(1.0, 0.0, 0.0);
         let t2 = Transform::translation(0.0, 1.0, 0.0);
         let result = t1.concat(&t2);
-        
+
         assert!((result.translation.x - 1.0).abs() < 1e-5);
         assert!((result.translation.y - 1.0).abs() < 1e-5);
         assert!((result.translation.z - 0.0).abs() < 1e-5);

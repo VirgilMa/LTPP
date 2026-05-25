@@ -5,9 +5,9 @@ use cgmath::*;
 // 碰撞信息
 #[derive(Clone, Copy)]
 pub struct CollisionInfo {
-    pub contact_point: Vector3<f32>,      // 接触点
-    pub penetration_depth: f32,           // 穿透深度
-    pub normal: Vector3<f32>,             // 指向第一个物体的法向量
+    pub contact_point: Vector3<f32>, // 接触点
+    pub penetration_depth: f32,      // 穿透深度
+    pub normal: Vector3<f32>,        // 指向第一个物体的法向量
 }
 
 /// 检测两个圆柱体之间的碰撞

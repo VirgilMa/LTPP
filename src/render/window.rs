@@ -1,15 +1,22 @@
 use std::sync::Arc;
-use std::time::{Duration, Instant};
 
 use super::state::State;
+#[cfg(not(target_arch = "wasm32"))]
 use cgmath;
+#[cfg(not(target_arch = "wasm32"))]
 use imgui::FontSource;
+#[cfg(not(target_arch = "wasm32"))]
 use imgui_wgpu::RendererConfig;
+#[cfg(not(target_arch = "wasm32"))]
 use imgui_winit_support::WinitPlatform;
+use web_time::{Duration, Instant};
+#[cfg(not(target_arch = "wasm32"))]
 use wgpu::TextureView;
+#[cfg(not(target_arch = "wasm32"))]
+use winit::event::Event;
 use winit::{
-    event::{Event, WindowEvent},
-    event_loop::{ActiveEventLoop, EventLoop},
+    event::WindowEvent,
+    event_loop::{ActiveEventLoop, ControlFlow, EventLoop, EventLoopProxy},
 };
 
 struct FpsCounter {
@@ -36,6 +43,7 @@ impl FpsCounter {
     }
 }
 
+#[cfg(not(target_arch = "wasm32"))]
 struct ImguiState {
     context: imgui::Context,
     platform: WinitPlatform,
@@ -45,27 +53,51 @@ struct ImguiState {
 struct App<'a> {
     fps_counter: FpsCounter,
     state: State<'a>,
+    #[cfg(not(target_arch = "wasm32"))]
     imgui: Option<ImguiState>,
     should_exit: bool,
-    last_frame_time: std::time::Instant,
+    last_frame_time: Instant,
 }
 
 impl<'a> App<'a> {
     pub fn new(state: State<'a>) -> App<'a> {
         let fps_counter = FpsCounter::new();
 
-        let mut app = Self {
+        let app = Self {
             fps_counter,
             state,
+            #[cfg(not(target_arch = "wasm32"))]
             imgui: None,
             should_exit: false,
-            last_frame_time: std::time::Instant::now(),
+            last_frame_time: Instant::now(),
         };
 
-        app.setup_imgui();
+        #[cfg(not(target_arch = "wasm32"))]
+        {
+            let mut app = app;
+            app.setup_imgui();
+            app
+        }
+
+        #[cfg(target_arch = "wasm32")]
         app
     }
 
+    fn frame_interval(&self) -> Option<Duration> {
+        (self.state.max_fps > 0.0).then(|| Duration::from_secs_f64(1.0 / self.state.max_fps))
+    }
+
+    fn next_frame_time(&self) -> Option<Instant> {
+        self.frame_interval()
+            .and_then(|interval| self.last_frame_time.checked_add(interval))
+    }
+
+    fn should_render_now(&self) -> bool {
+        self.next_frame_time()
+            .map_or(true, |next_frame_time| Instant::now() >= next_frame_time)
+    }
+
+    #[cfg(not(target_arch = "wasm32"))]
     pub fn setup_imgui(&mut self) {
         let mut context = imgui::Context::create();
         let mut platform = imgui_winit_support::WinitPlatform::new(&mut context);
@@ -130,11 +162,13 @@ impl<'a> App<'a> {
             Err(e) => eprintln!("{:?}", e),
         };
 
+        #[cfg(not(target_arch = "wasm32"))]
         self.imgui_render(&view);
 
         frame.present();
     }
 
+    #[cfg(not(target_arch = "wasm32"))]
     fn imgui_render(&mut self, view: &TextureView) {
         let imgui = self.imgui.as_mut().unwrap();
         imgui
@@ -269,21 +303,15 @@ impl winit::application::ApplicationHandler for App<'_> {
             return;
         }
 
-        // 检查是否需要等待下一帧以限制 FPS
-        if self.state.max_fps > 0.0 {
-            let elapsed = self.last_frame_time.elapsed();
-            let target_frame_time = std::time::Duration::from_secs_f64(1.0 / self.state.max_fps);
-
-            if elapsed < target_frame_time {
-                // 等待直到达到目标帧时间
-                std::thread::sleep(target_frame_time - elapsed);
+        match self.next_frame_time() {
+            Some(next_frame_time) if Instant::now() < next_frame_time => {
+                event_loop.set_control_flow(ControlFlow::WaitUntil(next_frame_time));
+            }
+            _ => {
+                event_loop.set_control_flow(ControlFlow::Poll);
+                self.state.window().request_redraw();
             }
         }
-
-        // 更新上次帧时间
-        self.last_frame_time = std::time::Instant::now();
-
-        self.state.window().request_redraw();
     }
 
     fn window_event(
@@ -307,6 +335,11 @@ impl winit::application::ApplicationHandler for App<'_> {
 
         match event {
             WindowEvent::RedrawRequested => {
+                if !self.should_render_now() {
+                    return;
+                }
+
+                self.last_frame_time = Instant::now();
                 self.state.update();
                 self.render(event_loop);
                 self.fps_counter.count();
@@ -322,33 +355,60 @@ impl winit::application::ApplicationHandler for App<'_> {
             _ => {} // }
         }
 
-        let imgui = self.imgui.as_mut().unwrap();
-        imgui.platform.handle_event::<()>(
-            imgui.context.io_mut(),
-            self.state.window(),
-            &Event::WindowEvent { window_id, event },
-        );
+        #[cfg(not(target_arch = "wasm32"))]
+        {
+            let imgui = self.imgui.as_mut().unwrap();
+            imgui.platform.handle_event::<()>(
+                imgui.context.io_mut(),
+                self.state.window(),
+                &Event::WindowEvent { window_id, event },
+            );
+        }
     }
 }
 
-struct RenderApp<'a>(Option<App<'a>>);
+enum RenderEvent {
+    Initialized(State<'static>),
+}
 
-impl RenderApp<'_> {
-    fn new() -> Self {
-        Self(None)
+struct RenderApp {
+    app: Option<App<'static>>,
+    initializing: bool,
+    proxy: EventLoopProxy<RenderEvent>,
+}
+
+impl RenderApp {
+    fn new(proxy: EventLoopProxy<RenderEvent>) -> Self {
+        Self {
+            app: None,
+            initializing: false,
+            proxy,
+        }
     }
 }
 
 pub async fn render() {
-    let event_loop = EventLoop::new().unwrap();
-    let mut render_app = RenderApp::new();
-    event_loop.run_app(&mut render_app).unwrap();
+    let event_loop = EventLoop::<RenderEvent>::with_user_event().build().unwrap();
+    let proxy = event_loop.create_proxy();
+    let render_app = RenderApp::new(proxy);
+
+    #[cfg(target_arch = "wasm32")]
+    {
+        use winit::platform::web::EventLoopExtWebSys;
+        event_loop.spawn_app(render_app);
+    }
+
+    #[cfg(not(target_arch = "wasm32"))]
+    {
+        let mut render_app = render_app;
+        event_loop.run_app(&mut render_app).unwrap();
+    }
 }
 
-impl winit::application::ApplicationHandler for RenderApp<'_> {
+impl winit::application::ApplicationHandler<RenderEvent> for RenderApp {
     fn resumed(&mut self, event_loop: &winit::event_loop::ActiveEventLoop) {
         // Only initialize the app once when the application is resumed for the first time
-        if self.0.is_none() {
+        if self.app.is_none() && !self.initializing {
             let window_attributes = winit::window::WindowAttributes::default()
                 .with_title("LTPP")
                 .with_inner_size(winit::dpi::LogicalSize::new(1920, 1080));
@@ -359,31 +419,57 @@ impl winit::application::ApplicationHandler for RenderApp<'_> {
             {
                 // Winit prevents sizing with CSS, so we have to set
                 // the size manually when on web.
-                window.set_inner_size(winit::dpi::PhysicalSize::new(450, 400));
+                let _ = window.request_inner_size(winit::dpi::PhysicalSize::new(450, 400));
 
                 use winit::platform::web::WindowExtWebSys;
                 web_sys::window()
                     .and_then(|win| win.document())
                     .and_then(|doc| {
                         let dst = doc.get_element_by_id("wasm-example")?;
-                        let canvas = web_sys::Element::from(window.canvas());
+                        let canvas = web_sys::Element::from(window.canvas()?);
                         dst.append_child(&canvas).ok()?;
                         Some(())
                     })
                     .expect("Couldn't append canvas to document body.");
             }
 
-            let state = pollster::block_on(State::new(window.clone()));
-            self.0 = Some(App::new(state));
+            #[cfg(target_arch = "wasm32")]
+            {
+                self.initializing = true;
+                let proxy = self.proxy.clone();
+                wasm_bindgen_futures::spawn_local(async move {
+                    let state = State::new(window.clone()).await;
+                    let _ = proxy.send_event(RenderEvent::Initialized(state));
+                });
+            }
+
+            #[cfg(not(target_arch = "wasm32"))]
+            {
+                let state = pollster::block_on(State::new(window.clone()));
+                self.app = Some(App::new(state));
+            }
         }
 
-        if let Some(app) = self.0.as_mut() {
+        if let Some(app) = self.app.as_mut() {
             app.resumed(event_loop);
         }
     }
 
+    fn user_event(&mut self, event_loop: &ActiveEventLoop, event: RenderEvent) {
+        match event {
+            RenderEvent::Initialized(state) => {
+                self.initializing = false;
+                self.app = Some(App::new(state));
+                if let Some(app) = self.app.as_mut() {
+                    app.resumed(event_loop);
+                    app.state.window().request_redraw();
+                }
+            }
+        }
+    }
+
     fn about_to_wait(&mut self, event_loop: &ActiveEventLoop) {
-        if let Some(app) = self.0.as_mut() {
+        if let Some(app) = self.app.as_mut() {
             app.about_to_wait(event_loop);
         }
     }
@@ -394,7 +480,7 @@ impl winit::application::ApplicationHandler for RenderApp<'_> {
         window_id: winit::window::WindowId,
         event: winit::event::WindowEvent,
     ) {
-        if let Some(app) = self.0.as_mut() {
+        if let Some(app) = self.app.as_mut() {
             app.window_event(event_loop, window_id, event);
         }
     }
