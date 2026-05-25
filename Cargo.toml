@@ -20,7 +20,7 @@ cfg-if = "1.0.0"
 cgmath = "0.18.0"
 chrono = "0.4.31"
 # env_logger = "0.10.1"
-image = "0.24.7"
+image = "0.25"
 imgui = "0.12"
 imgui-wgpu = {git = "https://github.com/Yatekii/imgui-wgpu-rs.git", rev = "bab0725a"}
 imgui-winit-support = "0.13.0"
