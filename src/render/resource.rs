@@ -437,7 +437,12 @@ pub fn generate_cylinder_edge_model(
 }
 
 // 圆柱体生成核心逻辑
-fn generate_cylinder(radius: f32, height: f32, sectors: u32, stacks: u32) -> (Vec<model::ModelVertex>, Vec<u32>) {
+fn generate_cylinder(
+    radius: f32,
+    height: f32,
+    sectors: u32,
+    stacks: u32,
+) -> (Vec<model::ModelVertex>, Vec<u32>) {
     let mut vertices = Vec::new();
     let mut indices = Vec::new();
     let pi = std::f32::consts::PI;
@@ -453,7 +458,7 @@ fn generate_cylinder(radius: f32, height: f32, sectors: u32, stacks: u32) -> (Ve
 
             // 纹理坐标
             let s = j as f32 / sectors as f32; // 水平纹理坐标
-            let t = i as f32 / stacks as f32;  // 垂直纹理坐标
+            let t = i as f32 / stacks as f32; // 垂直纹理坐标
 
             // 法线计算（侧面法线指向外侧）
             let normal = [x / radius, 0.0, z / radius]; // 侧面法线在XZ平面
@@ -528,7 +533,7 @@ fn generate_cylinder(radius: f32, height: f32, sectors: u32, stacks: u32) -> (Ve
     let bottom_edge_start_idx = bottom_center_idx + 2; // 底面边缘顶点开始的索引
     for j in 0..sectors {
         let center = bottom_center_idx;
-        let current = bottom_edge_start_idx + j * 2;   // 当前边缘顶点
+        let current = bottom_edge_start_idx + j * 2; // 当前边缘顶点
         let next = if j == sectors - 1 {
             bottom_edge_start_idx // 最后一个连接到第一个
         } else {
@@ -544,7 +549,7 @@ fn generate_cylinder(radius: f32, height: f32, sectors: u32, stacks: u32) -> (Ve
     let top_edge_start_idx = bottom_edge_start_idx + 1; // 顶面边缘顶点开始的索引
     for j in 0..sectors {
         let center = top_center_idx;
-        let current = top_edge_start_idx + j * 2;   // 当前边缘顶点
+        let current = top_edge_start_idx + j * 2; // 当前边缘顶点
         let next = if j == sectors - 1 {
             top_edge_start_idx // 最后一个连接到第一个
         } else {
@@ -615,7 +620,7 @@ mod tests {
     fn test_generate_cylinder() {
         // Test the generation logic without device-dependent operations
         let (vertices, indices) = generate_cylinder(1.0, 2.0, 8, 8);
-        
+
         // Basic checks
         assert!(!vertices.is_empty());
         assert!(!indices.is_empty());
